@@ -1,8 +1,6 @@
 import streamlit as st
 import pandas as pd
-from datetime import datetime
 import gspread
-import os
 
 # --- CONFIG ---
 st.set_page_config(page_title="ระบบบันทึกคะแนน V4 (Smart Filter)", layout="wide") 
