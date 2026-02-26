@@ -47,7 +47,7 @@ else:
     st.stop()
 
 # --- 3. UI INTERFACE ---
-st.title("🎓 ระบบจัดการคะแนนสอบ (Smart Filter & Year Support)")
+st.title("🎓 ระบบกรอกคะแนนติวเข้า ม.1 กรุงเทพ")
 st.markdown("---")
 
 col_form, col_table = st.columns([1, 1.3])
