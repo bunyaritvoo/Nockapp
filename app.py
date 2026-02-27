@@ -5,7 +5,7 @@ import gspread
 import os
 
 # --- 1. CONFIGURATION ---
-st.set_page_config(page_title="ระบบบันทึกคะแนน V10 (Fixed)", layout="wide") 
+st.set_page_config(page_title="ระบบบันทึกคะแนนกรอกคะแนนติวเข้าม.1", layout="wide") 
 
 SPREADSHEET_URL = "https://docs.google.com/spreadsheets/d/1ny5m5Yq4V269FdZemV105cDPeVUcp9sGjOyVAbbnA0Q/edit"
 
@@ -38,7 +38,7 @@ except Exception as e:
     st.stop()
 
 # --- 3. UI ---
-st.title("🎓 ระบบจัดการคะแนนสอบ (Monthly Update)")
+st.title("🎓 ระบบจัดการคะแนนสอบติวเข้าม.1 ")
 
 col_form, col_table = st.columns([1, 1.3])
 
