@@ -5,7 +5,7 @@ import gspread
 import os
 
 # --- 1. CONFIGURATION ---
-st.set_page_config(page_title="ระบบบันทึกคะแนน V10 (Monthly Mode)", layout="wide") 
+st.set_page_config(page_title="ระบบบันทึกคะแนน ติวเข้า ม.1", layout="wide") 
 
 SPREADSHEET_URL = "https://docs.google.com/spreadsheets/d/1ny5m5Yq4V269FdZemV105cDPeVUcp9sGjOyVAbbnA0Q/edit"
 
