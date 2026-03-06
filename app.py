@@ -9,7 +9,7 @@ import os
 import textwrap
 
 # --- 1. CONFIGURATION ---
-st.set_page_config(page_title="ระบบบันทึกคะแนน V17 (Dynamic Comments)", layout="wide") 
+st.set_page_config(page_title="ระบบบันทึกคะแนนติวเข้าม.1", layout="wide") 
 SPREADSHEET_URL = "https://docs.google.com/spreadsheets/d/1ny5m5Yq4V269FdZemV105cDPeVUcp9sGjOyVAbbnA0Q/edit"
 
 # --- 2. โหลดฟอนต์ภาษาไทย ---
@@ -69,7 +69,7 @@ def get_real_comment(subject, total_score):
     return "คะแนนไม่อยู่ในเกณฑ์ที่ตั้งไว้"
 
 # --- 4. UI INTERFACE ---
-st.title("🎓 ระบบจัดการคะแนนและรายงานผล (V17)")
+st.title("🎓 ระบบจัดการคะแนนและรายงานผล")
 tab_entry, tab_dashboard = st.tabs(["📝 บันทึกข้อมูล", "📊 พิมพ์รายงานผล (Report Card)"])
 
 # ==========================================
