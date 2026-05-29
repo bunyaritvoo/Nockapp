@@ -42,13 +42,12 @@ try:
     master_data = pd.DataFrame(sh.worksheet("StudentList").get_all_records())
     df_topics = pd.DataFrame(sh.worksheet("TopicSettings").get_all_records())
     
-    # 🌟 โหลดหน้าต่าง Comments เข้ามาในระบบ 🌟
     try: df_comments = pd.DataFrame(sh.worksheet("Comments").get_all_records())
     except: df_comments = pd.DataFrame()
 except:
     st.error("🚨 โหลดข้อมูลเริ่มต้นไม่ได้"); st.stop()
 
-# 🌟 ฟังก์ชันดึงคอมเมนต์ตามช่วงคะแนน (ถอดแบบมาจาก Colab) 🌟
+# ฟังก์ชันดึงคอมเมนต์ตามช่วงคะแนน
 def get_real_comment(subject, total_score):
     if df_comments.empty: return "ไม่พบหน้าตาราง Comments ใน Google Sheets"
     
@@ -93,39 +92,54 @@ with tab_entry:
         available_subjects = df_month[df_month.iloc[:, 0].str.strip() == student_name.strip()].iloc[:, 1].unique().tolist()
         selected_subject = st.selectbox("วิชา", ["-- เลือกวิชา --"] + available_subjects)
 
-        label_1, label_2, label_3, db_f1, db_f2, db_f3 = "ด.1", "ด.2", "ด.3", 10, 10, 10
+        # 🌟 รองรับหัวข้อ Dynamic (สูงสุด 7 หัวข้อ)
+        topic_labels = []
+        topic_fulls = []
+        
         if selected_subject != "-- เลือกวิชา --":
             match_topic = df_topics[(df_topics['Month'].astype(str).str.strip() == target_month.strip()) & (df_topics['Subject'].astype(str).str.strip() == selected_subject.strip())]
             if not match_topic.empty:
                 row = match_topic.iloc[0]
-                label_1, label_2, label_3 = row.get('Topic_1','') or "ด.1", row.get('Topic_2','') or "ด.2", row.get('Topic_3','') or "ด.3"
-                try: db_f1 = int(row.get('FullScore_1', 10))
-                except: pass
-                try: db_f2 = int(row.get('FullScore_2', 10))
-                except: pass
-                try: db_f3 = int(row.get('FullScore_3', 10))
-                except: pass
+                for i in range(1, 8): # ตรวจสอบ Topic_1 ถึง Topic_7
+                    t_name = str(row.get(f'Topic_{i}', '')).strip()
+                    if t_name and t_name.lower() != 'nan':
+                        topic_labels.append(t_name)
+                        try: topic_fulls.append(int(row.get(f'FullScore_{i}', 10)))
+                        except: topic_fulls.append(10)
+            
+            # ถ้าไม่มีตั้งค่าไว้ ให้ใช้ค่าพื้นฐาน 3 ช่อง
+            if not topic_labels:
+                topic_labels = ["ด.1", "ด.2", "ด.3"]
+                topic_fulls = [10, 10, 10]
 
             st.divider()
-            c1, c2, c3 = st.columns(3)
-            with c1: ui_f1 = st.number_input(f"เต็ม: {label_1}", min_value=1, value=db_f1)
-            with c2: ui_f2 = st.number_input(f"เต็ม: {label_2}", min_value=1, value=db_f2)
-            with c3: ui_f3 = st.number_input(f"เต็ม: {label_3}", min_value=1, value=db_f3)
-
-            with st.form("update_v17"):
-                year = st.selectbox("ปีการศึกษา", ["2569", "2570"])
-                s1 = st.number_input(f"{label_1} (ได้)", 0, ui_f1)
-                s2 = st.number_input(f"{label_2} (ได้)", 0, ui_f2)
-                s3 = st.number_input(f"{label_3} (ได้)", 0, ui_f3)
+            
+            with st.form("update_scores"):
+                year = st.selectbox("ปีการศึกษา", ["2569", "2570", "2571"])
+                st.markdown("**บันทึกคะแนนรายหัวข้อ:**")
+                
+                input_scores = []
+                cols = st.columns(len(topic_labels))
+                
+                for idx, col in enumerate(cols):
+                    with col:
+                        # สร้างกล่องกรอกคะแนนตามจำนวนหัวข้อที่มี
+                        val = st.number_input(f"{topic_labels[idx]} (เต็ม {topic_fulls[idx]})", min_value=0, max_value=topic_fulls[idx], value=0, key=f"in_{idx}")
+                        input_scores.append(val)
                 
                 if st.form_submit_button("🚀 บันทึกข้อมูล"):
                     try:
                         found = False
                         for i, r in enumerate(ws_current.get_all_values()):
                             if r[0].strip() == student_name.strip() and r[1].strip() == selected_subject.strip():
-                                ws_current.update(f"C{i+1}:H{i+1}", [[target_month, year, selected_branch, s1, s2, s3]])
+                                # คำนวณคอลัมน์เป้าหมายอัตโนมัติ เริ่มที่ C สิ้นสุดตามจำนวนหัวข้อ (Score_n)
+                                end_col_letter = chr(ord('E') + len(input_scores)) # ถ้า 3 หัวข้อจบที่ H, ถ้า 7 หัวข้อจบที่ L
+                                update_range = f"C{i+1}:{end_col_letter}{i+1}"
+                                update_values = [[target_month, year, selected_branch] + input_scores]
+                                
+                                ws_current.update(update_range, update_values)
                                 st.success("✅ บันทึกสำเร็จ!"); st.balloons(); st.rerun(); break
-                        if not found: st.error("❌ ไม่พบเป้าหมาย")
+                        if not found: st.error("❌ ไม่พบเป้าหมายที่ต้องการบันทึก")
                     except Exception as e: st.error(f"🚨 ข้อผิดพลาด: {e}")
 
     with col_table:
@@ -168,41 +182,63 @@ with tab_dashboard:
                     if subj not in ax_dict: continue
                     ax = ax_dict[subj]
                     
-                    t_labels, t_fulls = ["T1", "T2", "T3"], [10, 10, 10]
+                    # 🌟 ดึงหัวข้อ Dynamic มาสร้างแกนกราฟ
+                    t_labels, t_fulls = [], []
                     match_topic = df_topics[(df_topics['Month'].astype(str).str.strip() == target_month) & (df_topics['Subject'].astype(str).str.strip() == subj)]
+                    
                     if not match_topic.empty:
                         row = match_topic.iloc[0]
-                        t_labels = [row.get('Topic_1','') or "T1", row.get('Topic_2','') or "T2", row.get('Topic_3','') or "T3"]
-                        try: t_fulls = [int(row.get('FullScore_1', 10)), int(row.get('FullScore_2', 10)), int(row.get('FullScore_3', 10))]
-                        except: pass
+                        for i in range(1, 8):
+                            t_name = str(row.get(f'Topic_{i}', '')).strip()
+                            if t_name and t_name.lower() != 'nan':
+                                t_labels.append(t_name)
+                                try: t_fulls.append(int(row.get(f'FullScore_{i}', 10)))
+                                except: t_fulls.append(10)
+                                
+                    if not t_labels:
+                        t_labels, t_fulls = ["T1", "T2", "T3"], [10, 10, 10]
 
                     subj_row = student_data[student_data.iloc[:, 1].str.strip() == subj].iloc[0]
-                    try: scores_raw = [float(subj_row.iloc[5]) if str(subj_row.iloc[5]).strip() else 0, float(subj_row.iloc[6]) if str(subj_row.iloc[6]).strip() else 0, float(subj_row.iloc[7]) if str(subj_row.iloc[7]).strip() else 0]
-                    except: scores_raw = [0, 0, 0]
+                    
+                    # ดึงคะแนนดิบตามจำนวนแกนที่มี (คอลัมน์เริ่มที่ 5 เป็นต้นไปในตาราง Dataframe)
+                    scores_raw = []
+                    for idx in range(len(t_labels)):
+                        try:
+                            val_str = str(subj_row.iloc[5 + idx]).strip()
+                            scores_raw.append(float(val_str) if val_str else 0.0)
+                        except:
+                            scores_raw.append(0.0)
 
                     scores_norm = [(s/f)*10 if f>0 else 0 for s, f in zip(scores_raw, t_fulls)]
                     total_score = sum(scores_raw)
 
-                    # พล็อตกราฟ
-                    angles = [n / float(3) * 2 * np.pi for n in range(3)]
+                    # พล็อตกราฟ (รองรับ N แกนตามหัวข้อจริง)
+                    num_vars = len(t_labels)
+                    angles = [n / float(num_vars) * 2 * np.pi for n in range(num_vars)]
                     angles += angles[:1]; scores_norm += scores_norm[:1]
+                    
                     ax.set_theta_offset(np.pi / 2); ax.set_theta_direction(-1)
-                    ax.set_xticks(angles[:-1]); ax.set_xticklabels(t_labels, fontproperties=prop_normal)
+                    ax.set_xticks(angles[:-1])
+                    
+                    # ตัดคำในชื่อแกนกราฟกันทับซ้อน
+                    wrapped_labels = ["\n".join(textwrap.wrap(l, width=15)) for l in t_labels]
+                    ax.set_xticklabels(wrapped_labels, fontproperties=prop_normal, fontsize=10)
+                    
                     ax.set_yticks(np.arange(0, 11, 2)); ax.set_ylim(0, 10)
                     
                     line_color = colors.get(subj, "gray")
                     ax.plot(angles, scores_norm, color=line_color, linewidth=2)
                     ax.fill(angles, scores_norm, color=line_color, alpha=0.25)
-                    ax.set_title(f"วิชา {subj}", color=line_color, y=1.1, fontproperties=prop_title)
+                    ax.set_title(f"วิชา {subj}", color=line_color, y=1.15, fontproperties=prop_title)
 
-                    # 🌟 ดึงคอมเมนต์ของจริงจาก Google Sheets 🌟
+                    # 🌟 ดึงคอมเมนต์
                     fetched_comment = get_real_comment(subj, total_score)
                     comment_texts[subj] = f"คะแนนรวม: {total_score}/{sum(t_fulls)}\nความเห็น: {fetched_comment}"
 
                 for subj, ax in ax_dict.items():
                     if subj not in subjects_taken: ax.axis('off')
 
-                # พิมพ์ข้อความลงพื้นที่ฝั่งขวา
+                # พิมพ์ข้อความฝั่งขวา
                 y_positions = {"คณิตศาสตร์": 0.85, "วิทยาศาสตร์": 0.50, "ภาษาอังกฤษ": 0.15}
                 for subj in ["คณิตศาสตร์", "วิทยาศาสตร์", "ภาษาอังกฤษ"]:
                     ax_text.text(0.0, y_positions[subj], f"รายงานผล: {subj}", color=colors.get(subj, "black"), fontproperties=prop_title, ha='left', va='bottom')
