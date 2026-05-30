@@ -216,7 +216,6 @@ with tab_dashboard:
                 ax_text = fig.add_subplot(gs[:, 2])
                 ax_text.axis('off')
                 
-                # 🌟 ตั้งค่าพิกัดหน้ากระดาษฝั่งข้อความให้ขยายเป็น 100 ส่วน (แก้ปัญหาข้อความทับกัน 100%)
                 ax_text.set_ylim(0, 100)
                 ax_text.set_xlim(0, 100)
                 
@@ -285,17 +284,25 @@ with tab_dashboard:
                     if subj not in subjects_taken: 
                         ax.axis('off')
 
-                # 🌟 จัดการแสดงผลคอมเมนต์โดยใช้สเกล 0-100 ที่เพิ่งตั้งค่าไว้
-                # คณิตอยู่ตำแหน่งบนสุด (95), วิทย์อยู่ตรงกลาง (60), อังกฤษอยู่ล่างสุด (25)
-                y_positions = {"คณิตศาสตร์": 95, "วิทยาศาสตร์": 60, "ภาษาอังกฤษ": 25}
+                # 🌟 จัดการแสดงผลคอมเมนต์โดยใช้ระบบ Dynamic Flow (จัดเรียงต่อกันอัตโนมัติ)
+                y_current = 98 # พิกัดเริ่มต้นเกือบชิดขอบบน
                 
                 for subj in ["คณิตศาสตร์", "วิทยาศาสตร์", "ภาษาอังกฤษ"]:
-                    # ปริ้นหัวข้อวิชา สีตามกราฟ
-                    ax_text.text(0, y_positions[subj], f"รายงานผล: {subj}", color=colors.get(subj, "black"), fontproperties=prop_title, ha='left', va='bottom')
+                    # 1. พิมพ์หัวข้อวิชา (ให้จุดยึดอ้างอิงจากด้านบน 'top')
+                    ax_text.text(0, y_current, f"รายงานผล: {subj}", color=colors.get(subj, "black"), fontproperties=prop_title, ha='left', va='top')
                     
-                    # ปริ้นข้อความสีดำ ขยับลงมา 3% จากหัวข้อ
+                    # ขยับพิกัด Y ลงมา 4 หน่วยสำหรับพิมพ์ข้อความคอมเมนต์สีดำ
+                    y_current -= 4 
+                    
+                    # 2. พิมพ์ข้อความสีดำ
                     wrapped_text = "\n".join(textwrap.wrap(comment_texts[subj], width=55, break_long_words=False))
-                    ax_text.text(0, y_positions[subj] - 3, wrapped_text, color='#333333', fontproperties=prop_comment, ha='left', va='top', linespacing=1.5)
+                    ax_text.text(0, y_current, wrapped_text, color='#333333', fontproperties=prop_comment, ha='left', va='top', linespacing=1.5)
+                    
+                    # 3. ตรวจสอบจำนวนบรรทัดที่ใช้ไป เพื่อคำนวณระยะห่างสำหรับวิชาถัดไป
+                    num_lines = len(wrapped_text.split('\n'))
+                    
+                    # 4. หักพื้นที่ที่ใช้ไป (บรรทัดละประมาณ 2.8 หน่วย) + เผื่อช่องว่างระหว่างวิชา 6 หน่วย
+                    y_current -= (num_lines * 2.8) + 6
 
                 st.pyplot(fig)
             else: 
