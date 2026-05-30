@@ -212,8 +212,13 @@ with tab_dashboard:
                     "ภาษาอังกฤษ": fig.add_subplot(gs[1, 1], polar=True)
                 }
                 colors = {"คณิตศาสตร์": "blue", "วิทยาศาสตร์": "red", "ภาษาอังกฤษ": "green"}
+                
                 ax_text = fig.add_subplot(gs[:, 2])
                 ax_text.axis('off')
+                
+                # 🌟 ตั้งค่าพิกัดหน้ากระดาษฝั่งข้อความให้ขยายเป็น 100 ส่วน (แก้ปัญหาข้อความทับกัน 100%)
+                ax_text.set_ylim(0, 100)
+                ax_text.set_xlim(0, 100)
                 
                 comment_texts = {"คณิตศาสตร์": "ยังไม่มีข้อมูล", "วิทยาศาสตร์": "ยังไม่มีข้อมูล", "ภาษาอังกฤษ": "ยังไม่มีข้อมูล"}
 
@@ -274,21 +279,23 @@ with tab_dashboard:
                     ax.set_title(f"วิชา {subj}", color=line_color, y=1.1, fontproperties=prop_title)
 
                     fetched_comment = get_real_comment(subj, total_score, sum_full_score)
-                    comment_texts[subj] = f"คะแนนรวม: {total_score}/{sum_full_score} (คิดเป็น {calc_percent:.1f}%)\nความเห็น: {fetched_comment}"
+                    comment_texts[subj] = f"คะแนนรวม: {total_score}/{sum_full_score} (คิดเป็น {calc_percent:.1f}%)\nความเห็น:\n{fetched_comment}"
 
                 for subj, ax in ax_dict.items():
                     if subj not in subjects_taken: 
                         ax.axis('off')
 
-                # 🌟 จัดการแสดงผลคอมเมนต์ฝั่งขวา (แก้ไขระยะห่างแล้ว)
-                # ปรับตำแหน่ง Y เริ่มต้นให้สูงขึ้นและทิ้งระยะห่างแต่ละวิชาให้มากขึ้น
-                y_positions = {"คณิตศาสตร์": 0.98, "วิทยาศาสตร์": 0.65, "ภาษาอังกฤษ": 0.32}
+                # 🌟 จัดการแสดงผลคอมเมนต์โดยใช้สเกล 0-100 ที่เพิ่งตั้งค่าไว้
+                # คณิตอยู่ตำแหน่งบนสุด (95), วิทย์อยู่ตรงกลาง (60), อังกฤษอยู่ล่างสุด (25)
+                y_positions = {"คณิตศาสตร์": 95, "วิทยาศาสตร์": 60, "ภาษาอังกฤษ": 25}
+                
                 for subj in ["คณิตศาสตร์", "วิทยาศาสตร์", "ภาษาอังกฤษ"]:
-                    ax_text.text(0.0, y_positions[subj], f"รายงานผล: {subj}", color=colors.get(subj, "black"), fontproperties=prop_title, ha='left', va='bottom')
+                    # ปริ้นหัวข้อวิชา สีตามกราฟ
+                    ax_text.text(0, y_positions[subj], f"รายงานผล: {subj}", color=colors.get(subj, "black"), fontproperties=prop_title, ha='left', va='bottom')
                     
-                    # ขยายกล่องข้อความเป็น 55 และปรับบรรทัดเป็น 1.5 
+                    # ปริ้นข้อความสีดำ ขยับลงมา 3% จากหัวข้อ
                     wrapped_text = "\n".join(textwrap.wrap(comment_texts[subj], width=55, break_long_words=False))
-                    ax_text.text(0.0, y_positions[subj] - 0.05, wrapped_text, color='#333333', fontproperties=prop_comment, ha='left', va='top', linespacing=1.5)
+                    ax_text.text(0, y_positions[subj] - 3, wrapped_text, color='#333333', fontproperties=prop_comment, ha='left', va='top', linespacing=1.5)
 
                 st.pyplot(fig)
             else: 
