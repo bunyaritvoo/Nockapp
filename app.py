@@ -86,7 +86,6 @@ def get_real_comment(subject, total_score, full_score):
 # ตัวช่วยจัดฟอร์แมตป้ายกราฟใยแมงมุม (ป้องกันคำฉีก)
 def format_radar_label(label):
     label = label.strip()
-    # จัดการวิชาภาษาอังกฤษ
     if "Demonstrative" in label:
         return label.replace("/", "\n")
     elif "Countable" in label and "Uncountable" in label:
@@ -95,12 +94,8 @@ def format_radar_label(label):
         return "Singular &\nPlural Nouns"
     elif "Auxiliary" in label:
         return "Auxiliary Verb\nand Modal Verb"
-    
-    # จัดการวิชาคณิตศาสตร์ / วิทยาศาสตร์
     elif "ตัวประกอบของจำนวนนับ" in label:
         return "ตัวประกอบของจำนวนนับ\nห.ร.ม. ค.ร.น."
-    
-    # ถ้าไม่ใช่เงื่อนไขพิเศษด้านบน ให้ตัดคำกว้างขึ้น และไม่หั่นกลางคำ
     return "\n".join(textwrap.wrap(label, width=22, break_long_words=False))
 
 # --- 4. UI INTERFACE ---
@@ -207,7 +202,6 @@ with tab_dashboard:
             if subjects_taken:
                 fig = plt.figure(figsize=(18, 12))
                 
-                # 🌟 จัดการ Layout: กดเนื้อหาทั้งหมดลงมาไม่ให้เบียดหัวข้อ (แก้วิชาคณิตทับหัวกระดาษ)
                 fig.subplots_adjust(top=0.82, hspace=0.4, wspace=0.3)
                 gs = fig.add_gridspec(2, 3, width_ratios=[1, 1, 1.2])
                 fig.suptitle(f'รายงานผลการเรียนรู้: {report_student} (เดือน {target_month})', fontproperties=prop_header, fontsize=28, y=0.96)
@@ -268,7 +262,6 @@ with tab_dashboard:
                     ax.set_theta_direction(-1)
                     ax.set_xticks(angles[:-1])
                     
-                    # 🌟 ใช้ตัวช่วยตัดคำป้องกันคำฉีกในกราฟ
                     wrapped_labels = [format_radar_label(l) for l in t_labels]
                     ax.set_xticklabels(wrapped_labels, fontproperties=prop_normal, fontsize=10)
                     ax.set_yticks(np.arange(0, 11, 2))
@@ -278,7 +271,6 @@ with tab_dashboard:
                     ax.plot(angles, scores_norm, color=line_color, linewidth=2)
                     ax.fill(angles, scores_norm, color=line_color, alpha=0.25)
                     
-                    # 🌟 จัดการระยะห่างของชื่อวิชากับกราฟ
                     ax.set_title(f"วิชา {subj}", color=line_color, y=1.1, fontproperties=prop_title)
 
                     fetched_comment = get_real_comment(subj, total_score, sum_full_score)
@@ -288,16 +280,15 @@ with tab_dashboard:
                     if subj not in subjects_taken: 
                         ax.axis('off')
 
-                # 🌟 จัดการแสดงผลคอมเมนต์ฝั่งขวา
-                y_positions = {"คณิตศาสตร์": 0.85, "วิทยาศาสตร์": 0.50, "ภาษาอังกฤษ": 0.15}
+                # 🌟 จัดการแสดงผลคอมเมนต์ฝั่งขวา (แก้ไขระยะห่างแล้ว)
+                # ปรับตำแหน่ง Y เริ่มต้นให้สูงขึ้นและทิ้งระยะห่างแต่ละวิชาให้มากขึ้น
+                y_positions = {"คณิตศาสตร์": 0.98, "วิทยาศาสตร์": 0.65, "ภาษาอังกฤษ": 0.32}
                 for subj in ["คณิตศาสตร์", "วิทยาศาสตร์", "ภาษาอังกฤษ"]:
                     ax_text.text(0.0, y_positions[subj], f"รายงานผล: {subj}", color=colors.get(subj, "black"), fontproperties=prop_title, ha='left', va='bottom')
                     
-                    # 🌟 เพิ่มบรรทัด break_long_words=False ป้องกันการหั่นคำครึ่งท่อน
-                    wrapped_text = "\n".join(textwrap.wrap(comment_texts[subj], width=50, break_long_words=False))
-                    
-                    # 🌟 เพิ่ม linespacing=1.8 เพื่อป้องกันสระทับกัน!
-                    ax_text.text(0.0, y_positions[subj] - 0.05, wrapped_text, color='#333333', fontproperties=prop_comment, ha='left', va='top', linespacing=1.8)
+                    # ขยายกล่องข้อความเป็น 55 และปรับบรรทัดเป็น 1.5 
+                    wrapped_text = "\n".join(textwrap.wrap(comment_texts[subj], width=55, break_long_words=False))
+                    ax_text.text(0.0, y_positions[subj] - 0.05, wrapped_text, color='#333333', fontproperties=prop_comment, ha='left', va='top', linespacing=1.5)
 
                 st.pyplot(fig)
             else: 
