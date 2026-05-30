@@ -59,16 +59,13 @@ except:
     st.error("🚨 โหลดข้อมูลเริ่มต้นไม่ได้")
     st.stop()
 
-# 🌟 ฟังก์ชันดึงคอมเมนต์โดยแปลงคะแนนดิบเป็นเปอร์เซ็นต์ (รองรับคะแนนเต็มไม่เท่ากัน) 🌟
 def get_real_comment(subject, total_score, full_score):
     if df_comments.empty: 
         return "ไม่พบหน้าตาราง Comments ใน Google Sheets"
     if full_score == 0: 
         return "คะแนนเต็มรวมเป็น 0 ไม่สามารถคำนวณได้"
     
-    # คำนวณเป็นเปอร์เซ็นต์ร้อยละ 0 - 100
     percent_score = (total_score / full_score) * 100
-    
     col_map = {'คณิตศาสตร์': 'Comment_math', 'วิทยาศาสตร์': 'Comment_sci', 'ภาษาอังกฤษ': 'Comment_eng'}
     target_col = col_map.get(subject)
     
@@ -80,12 +77,31 @@ def get_real_comment(subject, total_score, full_score):
             range_str = str(row.get('เกณฑ์คะแนน', '')).strip()
             if '-' in range_str:
                 min_s, max_s = map(int, range_str.split('-'))
-                # นำเปอร์เซ็นต์ที่คำนวณได้ไปตรวจหากลุ่มเกณฑ์ (แบ่ง 5 ส่วน เช่น 0-20, 21-40)
                 if min_s <= round(percent_score) <= max_s:
                     return str(row[target_col])
         except: 
             continue
     return "คะแนนไม่อยู่ในเกณฑ์ที่ตั้งไว้"
+
+# ตัวช่วยจัดฟอร์แมตป้ายกราฟใยแมงมุม (ป้องกันคำฉีก)
+def format_radar_label(label):
+    label = label.strip()
+    # จัดการวิชาภาษาอังกฤษ
+    if "Demonstrative" in label:
+        return label.replace("/", "\n")
+    elif "Countable" in label and "Uncountable" in label:
+        return "Countable and\nUncountable Nouns"
+    elif "Singular" in label and "Plural" in label:
+        return "Singular &\nPlural Nouns"
+    elif "Auxiliary" in label:
+        return "Auxiliary Verb\nand Modal Verb"
+    
+    # จัดการวิชาคณิตศาสตร์ / วิทยาศาสตร์
+    elif "ตัวประกอบของจำนวนนับ" in label:
+        return "ตัวประกอบของจำนวนนับ\nห.ร.ม. ค.ร.น."
+    
+    # ถ้าไม่ใช่เงื่อนไขพิเศษด้านบน ให้ตัดคำกว้างขึ้น และไม่หั่นกลางคำ
+    return "\n".join(textwrap.wrap(label, width=22, break_long_words=False))
 
 # --- 4. UI INTERFACE ---
 st.title("🎓 ระบบจัดการคะแนนและรายงานผล")
@@ -115,9 +131,7 @@ with tab_entry:
         available_subjects = df_month[df_month.iloc[:, 0].str.strip() == student_name.strip()].iloc[:, 1].unique().tolist()
         selected_subject = st.selectbox("วิชา", ["-- เลือกวิชา --"] + available_subjects)
 
-        # จัดการดึงข้อมูลหัวข้อและคะแนนเต็มแบบ Dynamic (รองรับสูงสุด 7 หัวข้อตามโครงสร้างตารางใหม่)
-        topic_labels = []
-        topic_fulls = []
+        topic_labels, topic_fulls = [], []
 
         if selected_subject != "-- เลือกวิชา --":
             match_topic = df_topics[(df_topics['Month'].astype(str).str.strip() == target_month.strip()) & (df_topics['Subject'].astype(str).str.strip() == selected_subject.strip())]
@@ -132,10 +146,8 @@ with tab_entry:
                         except: 
                             topic_fulls.append(10)
             
-            # ค่าเริ่มต้นกรณีไม่มีระบุในโครงสร้างชีต
             if not topic_labels:
-                topic_labels = ["ด.1", "ด.2", "ด.3"]
-                topic_fulls = [10, 10, 10]
+                topic_labels, topic_fulls = ["ด.1", "ด.2", "ด.3"], [10, 10, 10]
 
             st.divider()
             
@@ -144,7 +156,6 @@ with tab_entry:
                 st.markdown("**กรอกคะแนนรายหัวข้อ:**")
                 
                 input_scores = []
-                # จัดสรรปุ่มตามจำนวนหัวข้อที่มีจริงแบบ Dynamic
                 cols = st.columns(len(topic_labels))
                 for idx, col in enumerate(cols):
                     with col:
@@ -156,7 +167,6 @@ with tab_entry:
                         found = False
                         for i, r in enumerate(ws_current.get_all_values()):
                             if r[0].strip() == student_name.strip() and r[1].strip() == selected_subject.strip():
-                                # คำนวณขอบเขตคอลัมน์ที่จะอัปเดตอัตโนมัติ (เช่น เริ่มที่ C ไปจบที่ H หรือ L ขึ้นอยู่กับจำนวนตัวเลขคะแนน)
                                 end_col_char = chr(ord('C') + 2 + len(input_scores))
                                 update_range = f"C{i+1}:{end_col_char}{i+1}"
                                 update_values = [[target_month, year, selected_branch] + input_scores]
@@ -196,8 +206,11 @@ with tab_dashboard:
 
             if subjects_taken:
                 fig = plt.figure(figsize=(18, 12))
-                gs = fig.add_gridspec(2, 3, width_ratios=[1, 1, 1.2], hspace=0.3, wspace=0.3)
-                fig.suptitle(f'รายงานผลการเรียนรู้: {report_student} (เดือน {target_month})', fontproperties=prop_header, fontsize=28, y=0.98)
+                
+                # 🌟 จัดการ Layout: กดเนื้อหาทั้งหมดลงมาไม่ให้เบียดหัวข้อ (แก้วิชาคณิตทับหัวกระดาษ)
+                fig.subplots_adjust(top=0.82, hspace=0.4, wspace=0.3)
+                gs = fig.add_gridspec(2, 3, width_ratios=[1, 1, 1.2])
+                fig.suptitle(f'รายงานผลการเรียนรู้: {report_student} (เดือน {target_month})', fontproperties=prop_header, fontsize=28, y=0.96)
 
                 ax_dict = {
                     "คณิตศาสตร์": fig.add_subplot(gs[0, 0:2], polar=True),
@@ -215,7 +228,6 @@ with tab_dashboard:
                         continue
                     ax = ax_dict[subj]
                     
-                    # ดึงข้อมูลหัวข้อแบบ Dynamic สำหรับทำแกนกราฟใยแมงมุม
                     t_labels, t_fulls = [], []
                     match_topic = df_topics[(df_topics['Month'].astype(str).str.strip() == target_month) & (df_topics['Subject'].astype(str).str.strip() == subj)]
                     if not match_topic.empty:
@@ -234,7 +246,6 @@ with tab_dashboard:
 
                     subj_row = student_data[student_data.iloc[:, 1].str.strip() == subj].iloc[0]
                     
-                    # ดึงคะแนนดิบตามจำนวนหัวข้อที่มีจริงในตารางชีต
                     scores_raw = []
                     for idx in range(len(t_labels)):
                         try:
@@ -243,12 +254,11 @@ with tab_dashboard:
                         except:
                             scores_raw.append(0.0)
 
-                    # ปรับแปลงคะแนนให้อยู่ในสเกลเต็ม 10 เพื่อวาดกราฟให้เท่ากันสวยงาม
                     scores_norm = [(s/f)*10 if f>0 else 0 for s, f in zip(scores_raw, t_fulls)]
                     total_score = sum(scores_raw)
                     sum_full_score = sum(t_fulls)
+                    calc_percent = (total_score / sum_full_score) * 100 if sum_full_score > 0 else 0.0
 
-                    # สร้างกราฟวงกลมใยแมงมุม (ยืดหยุ่นตามจำนวนแกนจริง N แกน)
                     num_vars = len(t_labels)
                     angles = [n / float(num_vars) * 2 * np.pi for n in range(num_vars)]
                     angles += angles[:1]
@@ -258,8 +268,8 @@ with tab_dashboard:
                     ax.set_theta_direction(-1)
                     ax.set_xticks(angles[:-1])
                     
-                    # ตัดคำในกรณีที่ชื่อหัวข้อยาวเกินไป ป้องกันป้ายทับซ้อนกันบนกราฟ
-                    wrapped_labels = ["\n".join(textwrap.wrap(l, width=12)) for l in t_labels]
+                    # 🌟 ใช้ตัวช่วยตัดคำป้องกันคำฉีกในกราฟ
+                    wrapped_labels = [format_radar_label(l) for l in t_labels]
                     ax.set_xticklabels(wrapped_labels, fontproperties=prop_normal, fontsize=10)
                     ax.set_yticks(np.arange(0, 11, 2))
                     ax.set_ylim(0, 10)
@@ -267,22 +277,27 @@ with tab_dashboard:
                     line_color = colors.get(subj, "gray")
                     ax.plot(angles, scores_norm, color=line_color, linewidth=2)
                     ax.fill(angles, scores_norm, color=line_color, alpha=0.25)
-                    ax.set_title(f"วิชา {subj}", color=line_color, y=1.15, fontproperties=prop_title)
+                    
+                    # 🌟 จัดการระยะห่างของชื่อวิชากับกราฟ
+                    ax.set_title(f"วิชา {subj}", color=line_color, y=1.1, fontproperties=prop_title)
 
-                    # 🌟 ส่งคะแนนดิบและคะแนนเต็มรวมเข้าไปเช็กเกณฑ์เปอร์เซ็นต์แบบ 5 ส่วน 🌟
                     fetched_comment = get_real_comment(subj, total_score, sum_full_score)
-                    comment_texts[subj] = f"คะแนนรวม: {total_score}/{sum_full_score}\nความเห็น: {fetched_comment}"
+                    comment_texts[subj] = f"คะแนนรวม: {total_score}/{sum_full_score} (คิดเป็น {calc_percent:.1f}%)\nความเห็น: {fetched_comment}"
 
                 for subj, ax in ax_dict.items():
                     if subj not in subjects_taken: 
                         ax.axis('off')
 
-                # ส่วนของการแสดงผลข้อความความคิดเห็นของคุณครูที่ฝั่งขวา
+                # 🌟 จัดการแสดงผลคอมเมนต์ฝั่งขวา
                 y_positions = {"คณิตศาสตร์": 0.85, "วิทยาศาสตร์": 0.50, "ภาษาอังกฤษ": 0.15}
                 for subj in ["คณิตศาสตร์", "วิทยาศาสตร์", "ภาษาอังกฤษ"]:
                     ax_text.text(0.0, y_positions[subj], f"รายงานผล: {subj}", color=colors.get(subj, "black"), fontproperties=prop_title, ha='left', va='bottom')
-                    wrapped_text = "\n".join(textwrap.wrap(comment_texts[subj], width=45))
-                    ax_text.text(0.0, y_positions[subj] - 0.05, wrapped_text, color='#333333', fontproperties=prop_comment, ha='left', va='top')
+                    
+                    # 🌟 เพิ่มบรรทัด break_long_words=False ป้องกันการหั่นคำครึ่งท่อน
+                    wrapped_text = "\n".join(textwrap.wrap(comment_texts[subj], width=50, break_long_words=False))
+                    
+                    # 🌟 เพิ่ม linespacing=1.8 เพื่อป้องกันสระทับกัน!
+                    ax_text.text(0.0, y_positions[subj] - 0.05, wrapped_text, color='#333333', fontproperties=prop_comment, ha='left', va='top', linespacing=1.8)
 
                 st.pyplot(fig)
             else: 
