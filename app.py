@@ -332,8 +332,6 @@ with tab_dashboard:
                     for subj, ax in ax_dict.items():
                         if subj not in subjects_taken: 
                             ax.axis('off')
-
-                    ax_stats.text(0, 95, "📊 สถิติเปรียบเทียบในสาขา", fontproperties=prop_title, color='#333333', ha='left', va='top', fontsize=15)
                     
                     y_stat = 75
                     for subj in ["คณิตศาสตร์", "วิทยาศาสตร์", "ภาษาอังกฤษ"]:
