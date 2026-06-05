@@ -146,7 +146,7 @@ with tab_entry:
             st.divider()
             
             with st.form("update_dynamic_form"):
-                year = st.selectbox("ปีการศึกษา", ["2569", "2570", "2571"])
+                year = st.selectbox("ปีการศึกษา", ["2568", "2569", "2570", "2571"], index=1)
                 st.markdown("**กรอกคะแนนรายหัวข้อ:**")
                 
                 input_scores = []
@@ -205,7 +205,6 @@ with tab_dashboard:
                 gs = fig.add_gridspec(2, 3, width_ratios=[1, 1, 1.2])
                 fig.suptitle(f'รายงานผลการเรียนรู้: {report_student} (เดือน {target_month})', fontproperties=prop_header, fontsize=28, y=0.96)
 
-                # 🌟 ปรับตำแหน่งแกนกราฟ: เลื่อนคณิตศาสตร์มาซ้ายสุด (0, 0) เพื่อให้พื้นที่ตรงกลางว่าง 🌟
                 ax_dict = {
                     "คณิตศาสตร์": fig.add_subplot(gs[0, 0], polar=True),
                     "วิทยาศาสตร์": fig.add_subplot(gs[1, 0], polar=True),
@@ -213,7 +212,6 @@ with tab_dashboard:
                 }
                 colors = {"คณิตศาสตร์": "blue", "วิทยาศาสตร์": "red", "ภาษาอังกฤษ": "green"}
                 
-                # 🌟 พื้นที่ว่างตรงกลาง (0, 1) สำหรับแสดงกล่องสถิติ Max/Min/Mean 🌟
                 ax_stats = fig.add_subplot(gs[0, 1])
                 ax_stats.axis('off')
                 ax_stats.set_ylim(0, 100)
@@ -225,7 +223,7 @@ with tab_dashboard:
                 ax_text.set_xlim(0, 100)
                 
                 comment_texts = {"คณิตศาสตร์": "ยังไม่มีข้อมูล", "วิทยาศาสตร์": "ยังไม่มีข้อมูล", "ภาษาอังกฤษ": "ยังไม่มีข้อมูล"}
-                stats_texts = {} # เก็บข้อความสถิติสำหรับไปแสดงในกล่องกลาง
+                stats_texts = {}
 
                 for subj in subjects_taken:
                     if subj not in ax_dict: 
@@ -264,8 +262,6 @@ with tab_dashboard:
                     sum_full_score = sum(t_fulls)
                     calc_percent = (total_score / sum_full_score) * 100 if sum_full_score > 0 else 0.0
 
-                    # ==========================================
-                    # 🌟 คำนวณสถิติ Min, Max, Mean สำหรับพล็อต 🌟
                     mask = (df_month.iloc[:, 1].astype(str).str.strip() == subj) & (df_month.iloc[:, 4].astype(str).str.strip() == student_branch_val)
                     peer_data = df_month[mask]
                     
@@ -284,11 +280,9 @@ with tab_dashboard:
                         stat_min = min(peer_totals)
                         stat_max = max(peer_totals)
                         stat_mean = sum(peer_totals) / len(peer_totals)
-                        # จัดเตรียมข้อความสถิติเข้า Dictionary
                         stats_texts[subj] = f"Max: {stat_max:g}   |   Min: {stat_min:g}   |   Mean: {stat_mean:.1f}"
                     else:
                         stats_texts[subj] = "ไม่มีข้อมูลสถิติ"
-                    # ==========================================
 
                     num_vars = len(t_labels)
                     angles = [n / float(num_vars) * 2 * np.pi for n in range(num_vars)]
@@ -311,29 +305,21 @@ with tab_dashboard:
                     ax.set_title(f"วิชา {subj}", color=line_color, y=1.1, fontproperties=prop_title)
 
                     fetched_comment = get_real_comment(subj, total_score, sum_full_score)
-                    
-                    # 🌟 เอาข้อความสถิติออกจากฝั่งขวา ให้เหลือแต่คะแนนและความเห็นเพียวๆ 🌟
                     comment_texts[subj] = f"คะแนนรวม: {total_score}/{sum_full_score} (คิดเป็น {calc_percent:.1f}%)\nความเห็น:\n{fetched_comment}"
 
                 for subj, ax in ax_dict.items():
                     if subj not in subjects_taken: 
                         ax.axis('off')
 
-                # ==============================================================
-                # 🌟 จัดการแสดงผล "กล่องสถิติเปรียบเทียบในสาขา" ตรงกลางหน้ากระดาษ 🌟
-                # ==============================================================
-                ax_stats.text(0, 95, "", fontproperties=prop_title, color='#333333', ha='left', va='top', fontsize=15)
+                ax_stats.text(0, 95, "📊 สถิติเปรียบเทียบในสาขา", fontproperties=prop_title, color='#333333', ha='left', va='top', fontsize=15)
                 
                 y_stat = 75
                 for subj in ["คณิตศาสตร์", "วิทยาศาสตร์", "ภาษาอังกฤษ"]:
                     if subj in subjects_taken:
                         ax_stats.text(0, y_stat, f"• {subj}", fontproperties=prop_title, color=colors.get(subj, "black"), ha='left', va='top')
                         ax_stats.text(5, y_stat - 12, stats_texts[subj], fontproperties=prop_comment, color='#555555', ha='left', va='top')
-                        y_stat -= 28 # ขยับพิกัดบรรทัดลงมาสำหรับวิชาถัดไป
+                        y_stat -= 28 
 
-                # ==============================================================
-                # 🌟 จัดการแสดงผลคอมเมนต์แบบ Dynamic Flow (ฝั่งขวาสุด) 🌟
-                # ==============================================================
                 y_current = 98 
                 for subj in ["คณิตศาสตร์", "วิทยาศาสตร์", "ภาษาอังกฤษ"]:
                     ax_text.text(0, y_current, f"รายงานผล: {subj}", color=colors.get(subj, "black"), fontproperties=prop_title, ha='left', va='top')
@@ -350,54 +336,78 @@ with tab_dashboard:
                 st.info("ไม่พบข้อมูลลงทะเบียนเรียนวิชาของนักเรียนคนนี้")
 
 # ==========================================
-# 🌟 TAB 3: สถิติภาพรวม (Min / Max / Mean) ตารางแยกต่างหาก
+# 🌟 TAB 3: สถิติภาพรวม (อิสระจากการเลือกหน้าแรก)
 # ==========================================
 with tab_stat:
-    st.subheader(f"📈 สถิติคะแนนภาพรวมประจำเดือน {target_month}")
+    # 🌟 เพิ่มกล่องเลือก เดือน และ ปี เฉพาะในแท็บสถิติ 🌟
+    col_stat1, col_stat2 = st.columns(2)
+    with col_stat1:
+        stat_month = st.selectbox("เลือกเดือน (สถิติ)", ["มกราคม", "กุมภาพันธ์", "มีนาคม", "เมษายน", "พฤษภาคม", "มิถุนายน", "กรกฎาคม", "สิงหาคม", "กันยายน", "ตุลาคม", "พฤศจิกายน", "ธันวาคม"], index=4, key="stat_month_select")
+    with col_stat2:
+        stat_year = st.selectbox("เลือกปีการศึกษา (สถิติ)", ["2568", "2569", "2570", "2571"], index=1, key="stat_year_select")
+
+    st.subheader(f"📈 สถิติคะแนนภาพรวม: เดือน {stat_month} ปี {stat_year}")
     
-    if not df_month.empty:
-        df_stat = df_month.copy()
-        score_cols = df_stat.columns[5:]
-        for col in score_cols:
-            df_stat[col] = pd.to_numeric(df_stat[col], errors='coerce').fillna(0)
+    try:
+        # ดึงข้อมูลแผ่นงานตามเดือนที่เลือกในแท็บสถิติ
+        ws_stat = sh.worksheet(stat_month)
+        df_stat_raw = pd.DataFrame(ws_stat.get_all_values())
+        df_stat_raw.columns = df_stat_raw.iloc[0]
+        df_stat = df_stat_raw[1:].reset_index(drop=True)
+    except:
+        df_stat = pd.DataFrame()
         
-        df_stat['Total_Score'] = df_stat[score_cols].sum(axis=1)
-        df_stat = df_stat[df_stat.iloc[:, 1].astype(str).str.strip() != '']
-        df_stat = df_stat[df_stat.iloc[:, 1].notna()]
+    if not df_stat.empty:
+        # 🌟 กรองข้อมูลให้ตรงกับปีที่คุณเลือก (คอลัมน์ Year คือ Index ที่ 3) 🌟
+        year_col = df_stat.columns[3]
+        df_stat = df_stat[df_stat[year_col].astype(str).str.strip() == stat_year.strip()]
         
         if not df_stat.empty:
-            branch_col = df_stat.columns[4]
-            subj_col = df_stat.columns[1]
+            score_cols = df_stat.columns[5:]
+            for col in score_cols:
+                df_stat[col] = pd.to_numeric(df_stat[col], errors='coerce').fillna(0)
             
-            stat_summary = df_stat.groupby([branch_col, subj_col])['Total_Score'].agg(
-                Min='min', 
-                Max='max', 
-                Mean='mean',
-                Count='count'
-            ).reset_index()
+            df_stat['Total_Score'] = df_stat[score_cols].sum(axis=1)
+            df_stat = df_stat[df_stat.iloc[:, 1].astype(str).str.strip() != '']
+            df_stat = df_stat[df_stat.iloc[:, 1].notna()]
             
-            stat_summary.columns = ['สาขา', 'วิชา', 'คะแนนต่ำสุด (Min)', 'คะแนนสูงสุด (Max)', 'คะแนนเฉลี่ย (Mean)', 'จำนวนนักเรียนสอบ']
-            stat_summary['คะแนนเฉลี่ย (Mean)'] = stat_summary['คะแนนเฉลี่ย (Mean)'].round(2)
-            
-            st.dataframe(stat_summary, use_container_width=True)
-            st.divider()
-            st.markdown("### 📊 กราฟเปรียบเทียบคะแนนเฉลี่ย (แบ่งตามวิชาและสาขา)")
-            
-            fig_stat, ax_stat = plt.subplots(figsize=(12, 6))
-            pivot_stat = stat_summary.pivot(index='วิชา', columns='สาขา', values='คะแนนเฉลี่ย (Mean)')
-            pivot_stat.plot(kind='bar', ax=ax_stat, width=0.6, alpha=0.85)
-            
-            ax_stat.set_title(f'เปรียบเทียบคะแนนเฉลี่ย (เดือน {target_month})', fontproperties=prop_header, pad=20)
-            ax_stat.set_xlabel('รายวิชา', fontproperties=prop_title, labelpad=10)
-            ax_stat.set_ylabel('คะแนนเฉลี่ย (คะแนนดิบรวม)', fontproperties=prop_title, labelpad=10)
-            
-            ax_stat.set_xticklabels(pivot_stat.index, fontproperties=prop_normal, rotation=0, fontsize=14)
-            for label in ax_stat.get_yticklabels():
-                label.set_fontproperties(prop_normal)
-                label.set_fontsize(12)
+            if not df_stat.empty:
+                branch_col = df_stat.columns[4]
+                subj_col = df_stat.columns[1]
                 
-            ax_stat.legend(prop=prop_normal, title="สาขา", title_fontproperties=prop_title)
-            fig_stat.tight_layout()
-            st.pyplot(fig_stat)
+                stat_summary = df_stat.groupby([branch_col, subj_col])['Total_Score'].agg(
+                    Min='min', 
+                    Max='max', 
+                    Mean='mean',
+                    Count='count'
+                ).reset_index()
+                
+                stat_summary.columns = ['สาขา', 'วิชา', 'คะแนนต่ำสุด (Min)', 'คะแนนสูงสุด (Max)', 'คะแนนเฉลี่ย (Mean)', 'จำนวนนักเรียนสอบ']
+                stat_summary['คะแนนเฉลี่ย (Mean)'] = stat_summary['คะแนนเฉลี่ย (Mean)'].round(2)
+                
+                st.dataframe(stat_summary, use_container_width=True)
+                st.divider()
+                st.markdown(f"### 📊 กราฟเปรียบเทียบคะแนนเฉลี่ย (เดือน {stat_month} ปี {stat_year})")
+                
+                fig_stat, ax_stat = plt.subplots(figsize=(12, 6))
+                pivot_stat = stat_summary.pivot(index='วิชา', columns='สาขา', values='คะแนนเฉลี่ย (Mean)')
+                pivot_stat.plot(kind='bar', ax=ax_stat, width=0.6, alpha=0.85)
+                
+                ax_stat.set_title(f'เปรียบเทียบคะแนนเฉลี่ย: {stat_month} {stat_year}', fontproperties=prop_header, pad=20)
+                ax_stat.set_xlabel('รายวิชา', fontproperties=prop_title, labelpad=10)
+                ax_stat.set_ylabel('คะแนนเฉลี่ย (คะแนนดิบรวม)', fontproperties=prop_title, labelpad=10)
+                
+                ax_stat.set_xticklabels(pivot_stat.index, fontproperties=prop_normal, rotation=0, fontsize=14)
+                for label in ax_stat.get_yticklabels():
+                    label.set_fontproperties(prop_normal)
+                    label.set_fontsize(12)
+                    
+                ax_stat.legend(prop=prop_normal, title="สาขา", title_fontproperties=prop_title)
+                fig_stat.tight_layout()
+                st.pyplot(fig_stat)
+            else:
+                st.info(f"ไม่พบข้อมูลนักเรียนที่มีคะแนนในเดือน {stat_month} ปี {stat_year}")
         else:
-            st.info("ไม่พบข้อมูลคะแนนสำหรับการประมวลผลสถิติในเดือนนี้")
+            st.warning(f"ไม่มีข้อมูลการลงทะเบียนเรียนในปีการศึกษา {stat_year} สำหรับเดือน {stat_month} (มีแต่ข้อมูลของปีอื่น)")
+    else:
+        st.error(f"❌ ไม่พบหน้าตารางข้อมูล (Sheet) ของเดือน '{stat_month}'")
