@@ -107,7 +107,7 @@ tab_entry, tab_dashboard, tab_stat = st.tabs(["📝 บันทึกข้อ�
 with tab_entry:
     col_form, col_table = st.columns([1, 1.3])
     with col_form:
-        target_month = st.selectbox("เลือกเดือน", ["มกราคม", "กุมภาพันธ์", "มีนาคม", "เมษายน", "พฤษภาคม", "มิถุนายน", "กรกฎาคม", "สิงหาคม", "กันยายน", "ตุลาคม", "พฤศจิกายน", "ธันวาคม"])
+        target_month = st.selectbox("เลือกเดือน (สำหรับบันทึก)", ["มกราคม", "กุมภาพันธ์", "มีนาคม", "เมษายน", "พฤษภาคม", "มิถุนายน", "กรกฎาคม", "สิงหาคม", "กันยายน", "ตุลาคม", "พฤศจิกายน", "ธันวาคม"], key="entry_month")
         try:
             ws_current = sh.worksheet(target_month)
             df_month = pd.DataFrame(ws_current.get_all_values())
@@ -188,168 +188,190 @@ with tab_entry:
 # 🌟 TAB 2: กราฟ + ดึงคอมเมนต์อัตโนมัติตามช่วงคะแนน
 # ==========================================
 with tab_dashboard:
-    st.subheader(f"📄 พิมพ์รายงานผลการเรียนรู้ รอบเดือน {target_month}")
+    # 🌟 เพิ่มกล่องเลือก เดือน และ ปี สำหรับหน้าพิมพ์รายงาน 🌟
+    col_rep1, col_rep2 = st.columns(2)
+    with col_rep1:
+        report_month = st.selectbox("เลือกเดือน (สำหรับออกรายงาน)", ["มกราคม", "กุมภาพันธ์", "มีนาคม", "เมษายน", "พฤษภาคม", "มิถุนายน", "กรกฎาคม", "สิงหาคม", "กันยายน", "ตุลาคม", "พฤศจิกายน", "ธันวาคม"], index=4, key="report_month_select")
+    with col_rep2:
+        report_year = st.selectbox("เลือกปีการศึกษา (สำหรับออกรายงาน)", ["2568", "2569", "2570", "2571"], index=1, key="report_year_select")
+
+    st.subheader(f"📄 พิมพ์รายงานผลการเรียนรู้: เดือน {report_month} ปี {report_year}")
     
-    if not df_month.empty:
-        all_students = sorted([n for n in df_month.iloc[:, 0].astype(str).str.strip().unique().tolist() if n])
-        report_student = st.selectbox("เลือกนักเรียน", ["-- เลือกนักเรียน --"] + all_students)
+    try:
+        ws_report = sh.worksheet(report_month)
+        df_report_raw = pd.DataFrame(ws_report.get_all_values())
+        df_report_raw.columns = df_report_raw.iloc[0]
+        df_report = df_report_raw[1:].reset_index(drop=True)
+    except:
+        df_report = pd.DataFrame()
+        st.error(f"❌ ไม่พบหน้าตารางข้อมูล (Sheet) ของเดือน '{report_month}'")
 
-        if report_student != "-- เลือกนักเรียน --":
-            student_data = df_month[df_month.iloc[:, 0].str.strip() == report_student]
-            subjects_taken = student_data.iloc[:, 1].str.strip().tolist()
+    if not df_report.empty:
+        # กรองข้อมูลให้เหลือเฉพาะปีที่คุณเลือก
+        year_col = df_report.columns[3]
+        df_report = df_report[df_report[year_col].astype(str).str.strip() == report_year.strip()]
 
-            if subjects_taken:
-                fig = plt.figure(figsize=(18, 12))
-                
-                fig.subplots_adjust(top=0.82, hspace=0.4, wspace=0.3)
-                gs = fig.add_gridspec(2, 3, width_ratios=[1, 1, 1.2])
-                fig.suptitle(f'รายงานผลการเรียนรู้: {report_student} (เดือน {target_month})', fontproperties=prop_header, fontsize=28, y=0.96)
+        if not df_report.empty:
+            all_students = sorted([n for n in df_report.iloc[:, 0].astype(str).str.strip().unique().tolist() if n])
+            report_student = st.selectbox("เลือกนักเรียน", ["-- เลือกนักเรียน --"] + all_students)
 
-                ax_dict = {
-                    "คณิตศาสตร์": fig.add_subplot(gs[0, 0], polar=True),
-                    "วิทยาศาสตร์": fig.add_subplot(gs[1, 0], polar=True),
-                    "ภาษาอังกฤษ": fig.add_subplot(gs[1, 1], polar=True)
-                }
-                colors = {"คณิตศาสตร์": "blue", "วิทยาศาสตร์": "red", "ภาษาอังกฤษ": "green"}
-                
-                ax_stats = fig.add_subplot(gs[0, 1])
-                ax_stats.axis('off')
-                ax_stats.set_ylim(0, 100)
-                ax_stats.set_xlim(0, 100)
-                
-                ax_text = fig.add_subplot(gs[:, 2])
-                ax_text.axis('off')
-                ax_text.set_ylim(0, 100)
-                ax_text.set_xlim(0, 100)
-                
-                comment_texts = {"คณิตศาสตร์": "ยังไม่มีข้อมูล", "วิทยาศาสตร์": "ยังไม่มีข้อมูล", "ภาษาอังกฤษ": "ยังไม่มีข้อมูล"}
-                stats_texts = {}
+            if report_student != "-- เลือกนักเรียน --":
+                student_data = df_report[df_report.iloc[:, 0].str.strip() == report_student]
+                subjects_taken = student_data.iloc[:, 1].str.strip().tolist()
 
-                for subj in subjects_taken:
-                    if subj not in ax_dict: 
-                        continue
-                    ax = ax_dict[subj]
+                if subjects_taken:
+                    fig = plt.figure(figsize=(18, 12))
                     
-                    t_labels, t_fulls = [], []
-                    match_topic = df_topics[(df_topics['Month'].astype(str).str.strip() == target_month) & (df_topics['Subject'].astype(str).str.strip() == subj)]
-                    if not match_topic.empty:
-                        row = match_topic.iloc[0]
-                        for i in range(1, 8):
-                            t_name = str(row.get(f'Topic_{i}', '')).strip()
-                            if t_name and t_name.lower() != 'nan' and t_name != '':
-                                t_labels.append(t_name)
-                                try: 
-                                    t_fulls.append(int(row.get(f'FullScore_{i}', 10)))
-                                except: 
-                                    t_fulls.append(10)
+                    fig.subplots_adjust(top=0.82, hspace=0.4, wspace=0.3)
+                    gs = fig.add_gridspec(2, 3, width_ratios=[1, 1, 1.2])
+                    fig.suptitle(f'รายงานผลการเรียนรู้: {report_student} (เดือน {report_month} ปี {report_year})', fontproperties=prop_header, fontsize=28, y=0.96)
 
-                    if not t_labels:
-                        t_labels, t_fulls = ["T1", "T2", "T3"], [10, 10, 10]
-
-                    subj_row = student_data[student_data.iloc[:, 1].str.strip() == subj].iloc[0]
-                    student_branch_val = str(subj_row.iloc[4]).strip()
+                    ax_dict = {
+                        "คณิตศาสตร์": fig.add_subplot(gs[0, 0], polar=True),
+                        "วิทยาศาสตร์": fig.add_subplot(gs[1, 0], polar=True),
+                        "ภาษาอังกฤษ": fig.add_subplot(gs[1, 1], polar=True)
+                    }
+                    colors = {"คณิตศาสตร์": "blue", "วิทยาศาสตร์": "red", "ภาษาอังกฤษ": "green"}
                     
-                    scores_raw = []
-                    for idx in range(len(t_labels)):
-                        try:
-                            val_str = str(subj_row.iloc[5 + idx]).strip()
-                            scores_raw.append(float(val_str) if val_str else 0.0)
-                        except:
-                            scores_raw.append(0.0)
-
-                    scores_norm = [(s/f)*10 if f>0 else 0 for s, f in zip(scores_raw, t_fulls)]
-                    total_score = sum(scores_raw)
-                    sum_full_score = sum(t_fulls)
-                    calc_percent = (total_score / sum_full_score) * 100 if sum_full_score > 0 else 0.0
-
-                    mask = (df_month.iloc[:, 1].astype(str).str.strip() == subj) & (df_month.iloc[:, 4].astype(str).str.strip() == student_branch_val)
-                    peer_data = df_month[mask]
+                    ax_stats = fig.add_subplot(gs[0, 1])
+                    ax_stats.axis('off')
+                    ax_stats.set_ylim(0, 100)
+                    ax_stats.set_xlim(0, 100)
                     
-                    peer_totals = []
-                    for _, prow in peer_data.iterrows():
-                        p_scores = []
+                    ax_text = fig.add_subplot(gs[:, 2])
+                    ax_text.axis('off')
+                    ax_text.set_ylim(0, 100)
+                    ax_text.set_xlim(0, 100)
+                    
+                    comment_texts = {"คณิตศาสตร์": "ยังไม่มีข้อมูล", "วิทยาศาสตร์": "ยังไม่มีข้อมูล", "ภาษาอังกฤษ": "ยังไม่มีข้อมูล"}
+                    stats_texts = {}
+
+                    for subj in subjects_taken:
+                        if subj not in ax_dict: 
+                            continue
+                        ax = ax_dict[subj]
+                        
+                        t_labels, t_fulls = [], []
+                        match_topic = df_topics[(df_topics['Month'].astype(str).str.strip() == report_month) & (df_topics['Subject'].astype(str).str.strip() == subj)]
+                        if not match_topic.empty:
+                            row = match_topic.iloc[0]
+                            for i in range(1, 8):
+                                t_name = str(row.get(f'Topic_{i}', '')).strip()
+                                if t_name and t_name.lower() != 'nan' and t_name != '':
+                                    t_labels.append(t_name)
+                                    try: 
+                                        t_fulls.append(int(row.get(f'FullScore_{i}', 10)))
+                                    except: 
+                                        t_fulls.append(10)
+
+                        if not t_labels:
+                            t_labels, t_fulls = ["T1", "T2", "T3"], [10, 10, 10]
+
+                        subj_row = student_data[student_data.iloc[:, 1].str.strip() == subj].iloc[0]
+                        student_branch_val = str(subj_row.iloc[4]).strip()
+                        
+                        scores_raw = []
                         for idx in range(len(t_labels)):
                             try:
-                                val_s = str(prow.iloc[5 + idx]).strip()
-                                p_scores.append(float(val_s) if val_s else 0.0)
+                                val_str = str(subj_row.iloc[5 + idx]).strip()
+                                scores_raw.append(float(val_str) if val_str else 0.0)
                             except:
-                                p_scores.append(0.0)
-                        peer_totals.append(sum(p_scores))
+                                scores_raw.append(0.0)
+
+                        scores_norm = [(s/f)*10 if f>0 else 0 for s, f in zip(scores_raw, t_fulls)]
+                        total_score = sum(scores_raw)
+                        sum_full_score = sum(t_fulls)
+                        calc_percent = (total_score / sum_full_score) * 100 if sum_full_score > 0 else 0.0
+
+                        # คำนวณสถิติ Min, Max, Mean จากข้อมูล df_report ที่ถูกกรองปีแล้ว
+                        mask = (df_report.iloc[:, 1].astype(str).str.strip() == subj) & (df_report.iloc[:, 4].astype(str).str.strip() == student_branch_val)
+                        peer_data = df_report[mask]
                         
-                    if peer_totals:
-                        stat_min = min(peer_totals)
-                        stat_max = max(peer_totals)
-                        stat_mean = sum(peer_totals) / len(peer_totals)
-                        stats_texts[subj] = f"Max: {stat_max:g}   |   Min: {stat_min:g}   |   Mean: {stat_mean:.1f}"
-                    else:
-                        stats_texts[subj] = "ไม่มีข้อมูลสถิติ"
+                        peer_totals = []
+                        for _, prow in peer_data.iterrows():
+                            p_scores = []
+                            for idx in range(len(t_labels)):
+                                try:
+                                    val_s = str(prow.iloc[5 + idx]).strip()
+                                    p_scores.append(float(val_s) if val_s else 0.0)
+                                except:
+                                    p_scores.append(0.0)
+                            peer_totals.append(sum(p_scores))
+                            
+                        if peer_totals:
+                            stat_min = min(peer_totals)
+                            stat_max = max(peer_totals)
+                            stat_mean = sum(peer_totals) / len(peer_totals)
+                            stats_texts[subj] = f"Max: {stat_max:g}   |   Min: {stat_min:g}   |   Mean: {stat_mean:.1f}"
+                        else:
+                            stats_texts[subj] = "ไม่มีข้อมูลสถิติ"
 
-                    num_vars = len(t_labels)
-                    angles = [n / float(num_vars) * 2 * np.pi for n in range(num_vars)]
-                    angles += angles[:1]
-                    scores_norm += scores_norm[:1]
-                    
-                    ax.set_theta_offset(np.pi / 2)
-                    ax.set_theta_direction(-1)
-                    ax.set_xticks(angles[:-1])
-                    
-                    wrapped_labels = [format_radar_label(l) for l in t_labels]
-                    ax.set_xticklabels(wrapped_labels, fontproperties=prop_normal, fontsize=10)
-                    ax.set_yticks(np.arange(0, 11, 2))
-                    ax.set_ylim(0, 10)
-                    
-                    line_color = colors.get(subj, "gray")
-                    ax.plot(angles, scores_norm, color=line_color, linewidth=2)
-                    ax.fill(angles, scores_norm, color=line_color, alpha=0.25)
-                    
-                    ax.set_title(f"วิชา {subj}", color=line_color, y=1.1, fontproperties=prop_title)
+                        num_vars = len(t_labels)
+                        angles = [n / float(num_vars) * 2 * np.pi for n in range(num_vars)]
+                        angles += angles[:1]
+                        scores_norm += scores_norm[:1]
+                        
+                        ax.set_theta_offset(np.pi / 2)
+                        ax.set_theta_direction(-1)
+                        ax.set_xticks(angles[:-1])
+                        
+                        wrapped_labels = [format_radar_label(l) for l in t_labels]
+                        ax.set_xticklabels(wrapped_labels, fontproperties=prop_normal, fontsize=10)
+                        ax.set_yticks(np.arange(0, 11, 2))
+                        ax.set_ylim(0, 10)
+                        
+                        line_color = colors.get(subj, "gray")
+                        ax.plot(angles, scores_norm, color=line_color, linewidth=2)
+                        ax.fill(angles, scores_norm, color=line_color, alpha=0.25)
+                        
+                        ax.set_title(f"วิชา {subj}", color=line_color, y=1.1, fontproperties=prop_title)
 
-                    fetched_comment = get_real_comment(subj, total_score, sum_full_score)
-                    comment_texts[subj] = f"คะแนนรวม: {total_score}/{sum_full_score} (คิดเป็น {calc_percent:.1f}%)\nความเห็น:\n{fetched_comment}"
+                        fetched_comment = get_real_comment(subj, total_score, sum_full_score)
+                        comment_texts[subj] = f"คะแนนรวม: {total_score}/{sum_full_score} (คิดเป็น {calc_percent:.1f}%)\nความเห็น:\n{fetched_comment}"
 
-                for subj, ax in ax_dict.items():
-                    if subj not in subjects_taken: 
-                        ax.axis('off')
+                    for subj, ax in ax_dict.items():
+                        if subj not in subjects_taken: 
+                            ax.axis('off')
 
-                ax_stats.text(0, 95, "📊 สถิติเปรียบเทียบในสาขา", fontproperties=prop_title, color='#333333', ha='left', va='top', fontsize=15)
-                
-                y_stat = 75
-                for subj in ["คณิตศาสตร์", "วิทยาศาสตร์", "ภาษาอังกฤษ"]:
-                    if subj in subjects_taken:
-                        ax_stats.text(0, y_stat, f"• {subj}", fontproperties=prop_title, color=colors.get(subj, "black"), ha='left', va='top')
-                        ax_stats.text(5, y_stat - 12, stats_texts[subj], fontproperties=prop_comment, color='#555555', ha='left', va='top')
-                        y_stat -= 28 
-
-                y_current = 98 
-                for subj in ["คณิตศาสตร์", "วิทยาศาสตร์", "ภาษาอังกฤษ"]:
-                    ax_text.text(0, y_current, f"รายงานผล: {subj}", color=colors.get(subj, "black"), fontproperties=prop_title, ha='left', va='top')
-                    y_current -= 4 
+                    ax_stats.text(0, 95, "📊 สถิติเปรียบเทียบในสาขา", fontproperties=prop_title, color='#333333', ha='left', va='top', fontsize=15)
                     
-                    wrapped_text = "\n".join(textwrap.wrap(comment_texts[subj], width=55, break_long_words=False))
-                    ax_text.text(0, y_current, wrapped_text, color='#333333', fontproperties=prop_comment, ha='left', va='top', linespacing=1.5)
-                    
-                    num_lines = len(wrapped_text.split('\n'))
-                    y_current -= (num_lines * 2.8) + 12
+                    y_stat = 75
+                    for subj in ["คณิตศาสตร์", "วิทยาศาสตร์", "ภาษาอังกฤษ"]:
+                        if subj in subjects_taken:
+                            ax_stats.text(0, y_stat, f"• {subj}", fontproperties=prop_title, color=colors.get(subj, "black"), ha='left', va='top')
+                            ax_stats.text(5, y_stat - 12, stats_texts[subj], fontproperties=prop_comment, color='#555555', ha='left', va='top')
+                            y_stat -= 28 
 
-                st.pyplot(fig)
-            else: 
-                st.info("ไม่พบข้อมูลลงทะเบียนเรียนวิชาของนักเรียนคนนี้")
+                    y_current = 98 
+                    for subj in ["คณิตศาสตร์", "วิทยาศาสตร์", "ภาษาอังกฤษ"]:
+                        ax_text.text(0, y_current, f"รายงานผล: {subj}", color=colors.get(subj, "black"), fontproperties=prop_title, ha='left', va='top')
+                        y_current -= 4 
+                        
+                        wrapped_text = "\n".join(textwrap.wrap(comment_texts[subj], width=55, break_long_words=False))
+                        ax_text.text(0, y_current, wrapped_text, color='#333333', fontproperties=prop_comment, ha='left', va='top', linespacing=1.5)
+                        
+                        num_lines = len(wrapped_text.split('\n'))
+                        y_current -= (num_lines * 2.8) + 12
+
+                    st.pyplot(fig)
+                else: 
+                    st.info("ไม่พบข้อมูลลงทะเบียนเรียนวิชาของนักเรียนคนนี้")
+        else:
+            st.warning(f"ไม่มีข้อมูลการสอบของนักเรียนในปีการศึกษา {report_year} สำหรับเดือน {report_month}")
 
 # ==========================================
-# 🌟 TAB 3: สถิติภาพรวม (อิสระจากการเลือกหน้าแรก)
+# 🌟 TAB 3: สถิติภาพรวม
 # ==========================================
 with tab_stat:
-    # 🌟 เพิ่มกล่องเลือก เดือน และ ปี เฉพาะในแท็บสถิติ 🌟
     col_stat1, col_stat2 = st.columns(2)
     with col_stat1:
-        stat_month = st.selectbox("เลือกเดือน (สถิติ)", ["มกราคม", "กุมภาพันธ์", "มีนาคม", "เมษายน", "พฤษภาคม", "มิถุนายน", "กรกฎาคม", "สิงหาคม", "กันยายน", "ตุลาคม", "พฤศจิกายน", "ธันวาคม"], index=4, key="stat_month_select")
+        stat_month = st.selectbox("เลือกเดือน (สำหรับดูสถิติ)", ["มกราคม", "กุมภาพันธ์", "มีนาคม", "เมษายน", "พฤษภาคม", "มิถุนายน", "กรกฎาคม", "สิงหาคม", "กันยายน", "ตุลาคม", "พฤศจิกายน", "ธันวาคม"], index=4, key="stat_month_select")
     with col_stat2:
-        stat_year = st.selectbox("เลือกปีการศึกษา (สถิติ)", ["2568", "2569", "2570", "2571"], index=1, key="stat_year_select")
+        stat_year = st.selectbox("เลือกปีการศึกษา (สำหรับดูสถิติ)", ["2568", "2569", "2570", "2571"], index=1, key="stat_year_select")
 
     st.subheader(f"📈 สถิติคะแนนภาพรวม: เดือน {stat_month} ปี {stat_year}")
     
     try:
-        # ดึงข้อมูลแผ่นงานตามเดือนที่เลือกในแท็บสถิติ
         ws_stat = sh.worksheet(stat_month)
         df_stat_raw = pd.DataFrame(ws_stat.get_all_values())
         df_stat_raw.columns = df_stat_raw.iloc[0]
@@ -358,7 +380,6 @@ with tab_stat:
         df_stat = pd.DataFrame()
         
     if not df_stat.empty:
-        # 🌟 กรองข้อมูลให้ตรงกับปีที่คุณเลือก (คอลัมน์ Year คือ Index ที่ 3) 🌟
         year_col = df_stat.columns[3]
         df_stat = df_stat[df_stat[year_col].astype(str).str.strip() == stat_year.strip()]
         
@@ -408,6 +429,6 @@ with tab_stat:
             else:
                 st.info(f"ไม่พบข้อมูลนักเรียนที่มีคะแนนในเดือน {stat_month} ปี {stat_year}")
         else:
-            st.warning(f"ไม่มีข้อมูลการลงทะเบียนเรียนในปีการศึกษา {stat_year} สำหรับเดือน {stat_month} (มีแต่ข้อมูลของปีอื่น)")
+            st.warning(f"ไม่มีข้อมูลการสอบของนักเรียนในปีการศึกษา {stat_year} สำหรับเดือน {stat_month}")
     else:
         st.error(f"❌ ไม่พบหน้าตารางข้อมูล (Sheet) ของเดือน '{stat_month}'")
