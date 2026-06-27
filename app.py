@@ -89,7 +89,7 @@ def get_real_comment(subject, total_score, full_score):
             continue
     return "คะแนนไม่อยู่ในเกณฑ์ที่ตั้งไว้"
 
-# ✨ ฟังก์ชันบังคับตัดคำในกราฟเรดาร์แบบ Custom ป้องกันคำฉีก
+# ✨ ฟังก์ชันบังคับตัดคำในกราฟเรดาร์ ป้องกันคำฉีกและล้นขอบรูป
 def format_radar_label(label):
     label = str(label).strip()
     
@@ -97,11 +97,19 @@ def format_radar_label(label):
     if "ตัวประกอบของจำนวนนับ" in label:
         return "ตัวประกอบของจำนวนนับ\nห.ร.ม. ค.ร.น."
     elif "เศษส่วนและเศษซ้อน" in label or "เศษส่วนและเศษส่วนซ้อน" in label:
-        return "เศษส่วนและเศษส่วนซ้อน" # คืนค่าเต็ม ห้ามฉีก
+        return "เศษส่วนและเศษส่วนซ้อน" 
     elif "เศษส่วนอัตนัย" in label:
-        return "เศษส่วนอัตนัย" # คืนค่าเต็ม ห้ามฉีก
+        return "เศษส่วนอัตนัย" 
+    elif "ทศนิยมอัตนัย" in label:
+        return "ทศนิยมอัตนัย"
         
     # 🔬 หมวดวิทยาศาสตร์
+    elif "ห่วงโซ่อาหาร" in label:
+        return "ห่วงโซ่อาหาร\nและสายใยอาหาร"
+    elif "การเปลี่ยนแปลงของสาร" in label:
+        return "การเปลี่ยนแปลง\nของสาร"
+    elif "การจำแนกสิ่งมีชีวิต" in label:
+        return "การจำแนก\nสิ่งมีชีวิต"
     elif "ทักษะกระบวนการทางวิทยาศาตร์" in label or "ทักษะกระบวนการทางวิทยาศาสตร์" in label:
         return "ทักษะกระบวนการ\nทางวิทยาศาสตร์"
     elif "การกำหนดตัวแปร" in label:
@@ -119,7 +127,6 @@ def format_radar_label(label):
     elif "Auxiliary" in label:
         return "Auxiliary Verb\nand Modal Verb"
         
-    # สำหรับคำอื่นๆ ที่ไม่ได้ระบุ
     return "\n".join(textwrap.wrap(label, width=22, break_long_words=False))
 
 # --- 4. UI INTERFACE ---
@@ -186,9 +193,8 @@ with tab_entry:
                         found = False
                         for i, r in enumerate(ws_current.get_all_values()):
                             if r[0].strip() == student_name.strip() and r[1].strip() == selected_subject.strip():
-                                # เติมค่าว่างให้ครบ 7 ช่องป้องกันข้อมูลเก่าค้าง
                                 padded_scores = input_scores + [""] * (7 - len(input_scores))
-                                end_col_char = chr(ord('C') + 2 + 7) # อัปเดตคลุมไปถึง 7 ช่องเสมอ
+                                end_col_char = chr(ord('C') + 2 + 7) 
                                 update_range = f"C{i+1}:{end_col_char}{i+1}"
                                 update_values = [[target_month, year, selected_branch] + padded_scores]
                                 
@@ -215,7 +221,6 @@ with tab_entry:
 # 🌟 TAB 2: กราฟ + ดึงคอมเมนต์อัตโนมัติตามช่วงคะแนน
 # ==========================================
 with tab_dashboard:
-    # 🌟 เพิ่มกล่องเลือก เดือน และ ปี สำหรับหน้าพิมพ์รายงาน 🌟
     col_rep1, col_rep2 = st.columns(2)
     with col_rep1:
         report_month = st.selectbox("เลือกเดือน (สำหรับออกรายงาน)", ["มกราคม", "กุมภาพันธ์", "มีนาคม", "เมษายน", "พฤษภาคม", "มิถุนายน", "กรกฎาคม", "สิงหาคม", "กันยายน", "ตุลาคม", "พฤศจิกายน", "ธันวาคม"], index=4, key="report_month_select")
@@ -234,7 +239,6 @@ with tab_dashboard:
         st.error(f"❌ ไม่พบหน้าตารางข้อมูล (Sheet) ของเดือน '{report_month}'")
 
     if not df_report.empty:
-        # กรองข้อมูลให้เหลือเฉพาะปีที่คุณเลือก
         year_col = df_report.columns[3]
         df_report = df_report[df_report[year_col].astype(str).str.strip() == report_year.strip()]
 
@@ -249,29 +253,27 @@ with tab_dashboard:
                 if subjects_taken:
                     fig = plt.figure(figsize=(18, 12))
                     
-                    fig.subplots_adjust(top=0.82, hspace=0.4, wspace=0.3)
-                    gs = fig.add_gridspec(2, 3, width_ratios=[1, 1, 1.2])
+                    # 🌟 1. จัด Layout แบบรูปที่ 2 (ไม่มีสถิติตรงกลาง) 🌟
+                    fig.subplots_adjust(top=0.85, hspace=0.3, wspace=0.2)
+                    gs = fig.add_gridspec(2, 3, width_ratios=[1, 1, 1.5]) 
                     fig.suptitle(f'รายงานผลการเรียนรู้: {report_student} (เดือน {report_month} ปี {report_year})', fontproperties=prop_header, fontsize=28, y=0.96)
 
-                    ax_dict = {
-                        "คณิตศาสตร์": fig.add_subplot(gs[0, 0], polar=True),
-                        "วิทยาศาสตร์": fig.add_subplot(gs[1, 0], polar=True),
-                        "ภาษาอังกฤษ": fig.add_subplot(gs[1, 1], polar=True)
-                    }
+                    ax_dict = {}
+                    if "คณิตศาสตร์" in subjects_taken:
+                        ax_dict["คณิตศาสตร์"] = fig.add_subplot(gs[0, 0:2], polar=True)
+                    if "วิทยาศาสตร์" in subjects_taken:
+                        ax_dict["วิทยาศาสตร์"] = fig.add_subplot(gs[1, 0], polar=True)
+                    if "ภาษาอังกฤษ" in subjects_taken:
+                        ax_dict["ภาษาอังกฤษ"] = fig.add_subplot(gs[1, 1], polar=True)
+
                     colors = {"คณิตศาสตร์": "blue", "วิทยาศาสตร์": "red", "ภาษาอังกฤษ": "green"}
-                    
-                    ax_stats = fig.add_subplot(gs[0, 1])
-                    ax_stats.axis('off')
-                    ax_stats.set_ylim(0, 100)
-                    ax_stats.set_xlim(0, 100)
                     
                     ax_text = fig.add_subplot(gs[:, 2])
                     ax_text.axis('off')
                     ax_text.set_ylim(0, 100)
                     ax_text.set_xlim(0, 100)
                     
-                    comment_texts = {"คณิตศาสตร์": "ยังไม่มีข้อมูล", "วิทยาศาสตร์": "ยังไม่มีข้อมูล", "ภาษาอังกฤษ": "ยังไม่มีข้อมูล"}
-                    stats_texts = {}
+                    comment_texts = {}
 
                     for subj in subjects_taken:
                         if subj not in ax_dict: 
@@ -310,29 +312,6 @@ with tab_dashboard:
                         sum_full_score = sum(t_fulls)
                         calc_percent = (total_score / sum_full_score) * 100 if sum_full_score > 0 else 0.0
 
-                        # คำนวณสถิติ Min, Max, Mean จากข้อมูล df_report ที่ถูกกรองปีแล้ว
-                        mask = (df_report.iloc[:, 1].astype(str).str.strip() == subj) & (df_report.iloc[:, 4].astype(str).str.strip() == student_branch_val)
-                        peer_data = df_report[mask]
-                        
-                        peer_totals = []
-                        for _, prow in peer_data.iterrows():
-                            p_scores = []
-                            for idx in range(len(t_labels)):
-                                try:
-                                    val_s = str(prow.iloc[5 + idx]).strip()
-                                    p_scores.append(float(val_s) if val_s else 0.0)
-                                except:
-                                    p_scores.append(0.0)
-                            peer_totals.append(sum(p_scores))
-                            
-                        if peer_totals:
-                            stat_min = min(peer_totals)
-                            stat_max = max(peer_totals)
-                            stat_mean = sum(peer_totals) / len(peer_totals)
-                            stats_texts[subj] = f"Max: {stat_max:g}   |   Min: {stat_min:g}   |   Mean: {stat_mean:.1f}"
-                        else:
-                            stats_texts[subj] = "ไม่มีข้อมูลสถิติ"
-
                         num_vars = len(t_labels)
                         angles = [n / float(num_vars) * 2 * np.pi for n in range(num_vars)]
                         angles += angles[:1]
@@ -360,23 +339,30 @@ with tab_dashboard:
                         if subj not in subjects_taken: 
                             ax.axis('off')
                     
-                    y_stat = 75
+                    # 🌟 2. ดันข้อความวิทยาศาสตร์/อังกฤษ ให้ย่อหน้าเข้ามา 🌟
+                    y_current = 90 
                     for subj in ["คณิตศาสตร์", "วิทยาศาสตร์", "ภาษาอังกฤษ"]:
                         if subj in subjects_taken:
-                            ax_stats.text(0, y_stat, f"• {subj}", fontproperties=prop_title, color=colors.get(subj, "black"), ha='left', va='top')
-                            ax_stats.text(5, y_stat - 12, stats_texts[subj], fontproperties=prop_comment, color='#555555', ha='left', va='top')
-                            y_stat -= 28 
+                            x_pos = 0 # ตำแหน่งเริ่มต้นชิดซ้าย
+                            
+                            # ปรับการดันข้อความลงและดันไปทางขวา (ย่อหน้า)
+                            if subj == "วิทยาศาสตร์":
+                                y_current -= 6
+                                x_pos = 5 # ดันข้อความเข้ามา
+                            elif subj == "ภาษาอังกฤษ":
+                                y_current -= 6
+                                x_pos = 5 # ดันข้อความเข้ามา
 
-                    y_current = 98 
-                    for subj in ["คณิตศาสตร์", "วิทยาศาสตร์", "ภาษาอังกฤษ"]:
-                        ax_text.text(0, y_current, f"รายงานผล: {subj}", color=colors.get(subj, "black"), fontproperties=prop_title, ha='left', va='top')
-                        y_current -= 4 
-                        
-                        wrapped_text = "\n".join(textwrap.wrap(comment_texts[subj], width=55, break_long_words=False))
-                        ax_text.text(0, y_current, wrapped_text, color='#333333', fontproperties=prop_comment, ha='left', va='top', linespacing=1.5)
-                        
-                        num_lines = len(wrapped_text.split('\n'))
-                        y_current -= (num_lines * 2.8) + 12
+                            ax_text.text(x_pos, y_current, f"รายงานผล: {subj}", color=colors.get(subj, "black"), fontproperties=prop_title, ha='left', va='top')
+                            y_current -= 4 
+                            
+                            wrapped_text = comment_texts[subj]
+                            
+                            # 🌟 3. ยกเลิกการใช้ textwrap แสดงข้อความภาษาไทยตรงๆ ไม่ให้สระลอย/ฉีก 🌟
+                            ax_text.text(x_pos, y_current, wrapped_text, color='#333333', fontproperties=prop_comment, ha='left', va='top', linespacing=1.6)
+                            
+                            num_lines = len(wrapped_text.split('\n')) + (len(wrapped_text) // 60)
+                            y_current -= (num_lines * 3) + 8
 
                     st.pyplot(fig)
                 else: 
