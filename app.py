@@ -46,17 +46,23 @@ if not gc:
     st.error("🚨 เชื่อมต่อ Google API ไม่ได้")
     st.stop()
 
+# ✨ เพิ่มระบบ Cache ข้อมูลหลักเพื่อป้องกัน API Rate Limit ตอนเลือก Dropdown
+@st.cache_data(ttl=600)
+def load_core_data():
+    _sh = gc.open_by_url(SPREADSHEET_URL)
+    _master = pd.DataFrame(_sh.worksheet("StudentList").get_all_records())
+    _topics = pd.DataFrame(_sh.worksheet("TopicSettings").get_all_records())
+    try: 
+        _comments = pd.DataFrame(_sh.worksheet("Comments").get_all_records())
+    except: 
+        _comments = pd.DataFrame()
+    return _master, _topics, _comments
+
 try:
     sh = gc.open_by_url(SPREADSHEET_URL)
-    master_data = pd.DataFrame(sh.worksheet("StudentList").get_all_records())
-    df_topics = pd.DataFrame(sh.worksheet("TopicSettings").get_all_records())
-    
-    try: 
-        df_comments = pd.DataFrame(sh.worksheet("Comments").get_all_records())
-    except: 
-        df_comments = pd.DataFrame()
-except:
-    st.error("🚨 โหลดข้อมูลเริ่มต้นไม่ได้")
+    master_data, df_topics, df_comments = load_core_data()
+except Exception as e:
+    st.error(f"🚨 โหลดข้อมูลเริ่มต้นไม่ได้ สาเหตุ: {e}")
     st.stop()
 
 def get_real_comment(subject, total_score, full_score):
@@ -83,18 +89,37 @@ def get_real_comment(subject, total_score, full_score):
             continue
     return "คะแนนไม่อยู่ในเกณฑ์ที่ตั้งไว้"
 
+# ✨ ฟังก์ชันบังคับตัดคำในกราฟเรดาร์แบบ Custom ป้องกันคำฉีก
 def format_radar_label(label):
-    label = label.strip()
-    if "Demonstrative" in label:
-        return label.replace("/", "\n")
+    label = str(label).strip()
+    
+    # 📐 หมวดคณิตศาสตร์
+    if "ตัวประกอบของจำนวนนับ" in label:
+        return "ตัวประกอบของจำนวนนับ\nห.ร.ม. ค.ร.น."
+    elif "เศษส่วนและเศษซ้อน" in label or "เศษส่วนและเศษส่วนซ้อน" in label:
+        return "เศษส่วนและเศษส่วนซ้อน" # คืนค่าเต็ม ห้ามฉีก
+    elif "เศษส่วนอัตนัย" in label:
+        return "เศษส่วนอัตนัย" # คืนค่าเต็ม ห้ามฉีก
+        
+    # 🔬 หมวดวิทยาศาสตร์
+    elif "ทักษะกระบวนการทางวิทยาศาตร์" in label or "ทักษะกระบวนการทางวิทยาศาสตร์" in label:
+        return "ทักษะกระบวนการ\nทางวิทยาศาสตร์"
+    elif "การกำหนดตัวแปร" in label:
+        return "การกำหนด\nตัวแปร"
+    elif "การสังเคราะห์ด้วยแสง" in label:
+        return "การสังเคราะห์\nด้วยแสง"
+        
+    # 📝 หมวดภาษาอังกฤษ
+    elif "Demonstrative" in label:
+        return "Demonstrative Pronouns\nThere is/There are\nTense1"
     elif "Countable" in label and "Uncountable" in label:
         return "Countable and\nUncountable Nouns"
     elif "Singular" in label and "Plural" in label:
         return "Singular &\nPlural Nouns"
     elif "Auxiliary" in label:
         return "Auxiliary Verb\nand Modal Verb"
-    elif "ตัวประกอบของจำนวนนับ" in label:
-        return "ตัวประกอบของจำนวนนับ\nห.ร.ม. ค.ร.น."
+        
+    # สำหรับคำอื่นๆ ที่ไม่ได้ระบุ
     return "\n".join(textwrap.wrap(label, width=22, break_long_words=False))
 
 # --- 4. UI INTERFACE ---
@@ -117,12 +142,12 @@ with tab_entry:
             st.error(f"❌ ไม่พบหน้า Sheet ชื่อ '{target_month}'")
             st.stop()
 
-        branches = sorted(master_data['Branch'].unique().tolist())
+        branches = sorted(master_data['Branch'].astype(str).unique().tolist())
         selected_branch = st.selectbox("สาขา", ["-- โปรดเลือกสาขา --"] + branches)
         names = master_data[master_data['Branch'] == selected_branch]['Name'].tolist() if selected_branch != "-- โปรดเลือกสาขา --" else []
         student_name = st.selectbox("นักเรียน", ["-- โปรดเลือกรายชื่อ --"] + names)
 
-        available_subjects = df_month[df_month.iloc[:, 0].str.strip() == student_name.strip()].iloc[:, 1].unique().tolist()
+        available_subjects = df_month[df_month.iloc[:, 0].astype(str).str.strip() == student_name.strip()].iloc[:, 1].unique().tolist()
         selected_subject = st.selectbox("วิชา", ["-- เลือกวิชา --"] + available_subjects)
 
         topic_labels, topic_fulls = [], []
@@ -153,7 +178,7 @@ with tab_entry:
                 cols = st.columns(len(topic_labels))
                 for idx, col in enumerate(cols):
                     with col:
-                        val = st.number_input(f"{topic_labels[idx]} (เต็ม {topic_fulls[idx]})", min_value=0, max_value=topic_fulls[idx], value=0, key=f"score_{idx}")
+                        val = st.number_input(f"{topic_labels[idx]} (เต็ม {topic_fulls[idx]})", min_value=0.0, max_value=float(topic_fulls[idx]), value=0.0, step=1.0, key=f"score_{idx}")
                         input_scores.append(val)
                 
                 if st.form_submit_button("🚀 บันทึกข้อมูล"):
@@ -161,9 +186,11 @@ with tab_entry:
                         found = False
                         for i, r in enumerate(ws_current.get_all_values()):
                             if r[0].strip() == student_name.strip() and r[1].strip() == selected_subject.strip():
-                                end_col_char = chr(ord('C') + 2 + len(input_scores))
+                                # เติมค่าว่างให้ครบ 7 ช่องป้องกันข้อมูลเก่าค้าง
+                                padded_scores = input_scores + [""] * (7 - len(input_scores))
+                                end_col_char = chr(ord('C') + 2 + 7) # อัปเดตคลุมไปถึง 7 ช่องเสมอ
                                 update_range = f"C{i+1}:{end_col_char}{i+1}"
-                                update_values = [[target_month, year, selected_branch] + input_scores]
+                                update_values = [[target_month, year, selected_branch] + padded_scores]
                                 
                                 ws_current.update(update_range, update_values)
                                 st.success("✅ บันทึกสำเร็จ!")
@@ -188,7 +215,6 @@ with tab_entry:
 # 🌟 TAB 2: กราฟ + ดึงคอมเมนต์อัตโนมัติตามช่วงคะแนน
 # ==========================================
 with tab_dashboard:
-    # 🌟 เพิ่มกล่องเลือก เดือน และ ปี สำหรับหน้าพิมพ์รายงาน 🌟
     col_rep1, col_rep2 = st.columns(2)
     with col_rep1:
         report_month = st.selectbox("เลือกเดือน (สำหรับออกรายงาน)", ["มกราคม", "กุมภาพันธ์", "มีนาคม", "เมษายน", "พฤษภาคม", "มิถุนายน", "กรกฎาคม", "สิงหาคม", "กันยายน", "ตุลาคม", "พฤศจิกายน", "ธันวาคม"], index=4, key="report_month_select")
@@ -207,7 +233,6 @@ with tab_dashboard:
         st.error(f"❌ ไม่พบหน้าตารางข้อมูล (Sheet) ของเดือน '{report_month}'")
 
     if not df_report.empty:
-        # กรองข้อมูลให้เหลือเฉพาะปีที่คุณเลือก
         year_col = df_report.columns[3]
         df_report = df_report[df_report[year_col].astype(str).str.strip() == report_year.strip()]
 
@@ -222,8 +247,10 @@ with tab_dashboard:
                 if subjects_taken:
                     fig = plt.figure(figsize=(18, 12))
                     
-                    fig.subplots_adjust(top=0.82, hspace=0.4, wspace=0.3)
-                    gs = fig.add_gridspec(2, 3, width_ratios=[1, 1, 1.2])
+                    # ✨ ปรับ Layout ใหม่ เพิ่มพื้นที่ wspace ให้ข้อความไม่ทับกราฟ
+                    fig.subplots_adjust(top=0.85, hspace=0.5, wspace=0.6)
+                    gs = fig.add_gridspec(2, 3, width_ratios=[1, 1, 1.6])
+                    
                     fig.suptitle(f'รายงานผลการเรียนรู้: {report_student} (เดือน {report_month} ปี {report_year})', fontproperties=prop_header, fontsize=28, y=0.96)
 
                     ax_dict = {
@@ -283,7 +310,6 @@ with tab_dashboard:
                         sum_full_score = sum(t_fulls)
                         calc_percent = (total_score / sum_full_score) * 100 if sum_full_score > 0 else 0.0
 
-                        # คำนวณสถิติ Min, Max, Mean จากข้อมูล df_report ที่ถูกกรองปีแล้ว
                         mask = (df_report.iloc[:, 1].astype(str).str.strip() == subj) & (df_report.iloc[:, 4].astype(str).str.strip() == student_branch_val)
                         peer_data = df_report[mask]
                         
@@ -345,11 +371,13 @@ with tab_dashboard:
                         ax_text.text(0, y_current, f"รายงานผล: {subj}", color=colors.get(subj, "black"), fontproperties=prop_title, ha='left', va='top')
                         y_current -= 4 
                         
-                        wrapped_text = "\n".join(textwrap.wrap(comment_texts[subj], width=55, break_long_words=False))
-                        ax_text.text(0, y_current, wrapped_text, color='#333333', fontproperties=prop_comment, ha='left', va='top', linespacing=1.5)
+                        # ✨ ยกเลิกการใช้ textwrap ดึงคำมาแสดงตรงๆ ให้คุณไปเคาะบรรทัดเองใน Excel/Sheets
+                        wrapped_text = comment_texts[subj]
+                        ax_text.text(0, y_current, wrapped_text, color='#333333', fontproperties=prop_comment, ha='left', va='top', linespacing=1.6)
                         
-                        num_lines = len(wrapped_text.split('\n'))
-                        y_current -= (num_lines * 2.8) + 12
+                        # คำนวณระยะห่างบรรทัดต่อไปแบบกะระยะ
+                        num_lines = len(wrapped_text.split('\n')) + (len(wrapped_text) // 50)
+                        y_current -= (num_lines * 3.5) + 8
 
                     st.pyplot(fig)
                 else: 
