@@ -215,6 +215,7 @@ with tab_entry:
 # 🌟 TAB 2: กราฟ + ดึงคอมเมนต์อัตโนมัติตามช่วงคะแนน
 # ==========================================
 with tab_dashboard:
+    # 🌟 เพิ่มกล่องเลือก เดือน และ ปี สำหรับหน้าพิมพ์รายงาน 🌟
     col_rep1, col_rep2 = st.columns(2)
     with col_rep1:
         report_month = st.selectbox("เลือกเดือน (สำหรับออกรายงาน)", ["มกราคม", "กุมภาพันธ์", "มีนาคม", "เมษายน", "พฤษภาคม", "มิถุนายน", "กรกฎาคม", "สิงหาคม", "กันยายน", "ตุลาคม", "พฤศจิกายน", "ธันวาคม"], index=4, key="report_month_select")
@@ -233,6 +234,7 @@ with tab_dashboard:
         st.error(f"❌ ไม่พบหน้าตารางข้อมูล (Sheet) ของเดือน '{report_month}'")
 
     if not df_report.empty:
+        # กรองข้อมูลให้เหลือเฉพาะปีที่คุณเลือก
         year_col = df_report.columns[3]
         df_report = df_report[df_report[year_col].astype(str).str.strip() == report_year.strip()]
 
@@ -247,10 +249,8 @@ with tab_dashboard:
                 if subjects_taken:
                     fig = plt.figure(figsize=(18, 12))
                     
-                    # ✨ ปรับ Layout ใหม่ เพิ่มพื้นที่ wspace ให้ข้อความไม่ทับกราฟ
-                    fig.subplots_adjust(top=0.85, hspace=0.5, wspace=0.6)
-                    gs = fig.add_gridspec(2, 3, width_ratios=[1, 1, 1.6])
-                    
+                    fig.subplots_adjust(top=0.82, hspace=0.4, wspace=0.3)
+                    gs = fig.add_gridspec(2, 3, width_ratios=[1, 1, 1.2])
                     fig.suptitle(f'รายงานผลการเรียนรู้: {report_student} (เดือน {report_month} ปี {report_year})', fontproperties=prop_header, fontsize=28, y=0.96)
 
                     ax_dict = {
@@ -310,6 +310,7 @@ with tab_dashboard:
                         sum_full_score = sum(t_fulls)
                         calc_percent = (total_score / sum_full_score) * 100 if sum_full_score > 0 else 0.0
 
+                        # คำนวณสถิติ Min, Max, Mean จากข้อมูล df_report ที่ถูกกรองปีแล้ว
                         mask = (df_report.iloc[:, 1].astype(str).str.strip() == subj) & (df_report.iloc[:, 4].astype(str).str.strip() == student_branch_val)
                         peer_data = df_report[mask]
                         
@@ -371,13 +372,11 @@ with tab_dashboard:
                         ax_text.text(0, y_current, f"รายงานผล: {subj}", color=colors.get(subj, "black"), fontproperties=prop_title, ha='left', va='top')
                         y_current -= 4 
                         
-                        # ✨ ยกเลิกการใช้ textwrap ดึงคำมาแสดงตรงๆ ให้คุณไปเคาะบรรทัดเองใน Excel/Sheets
-                        wrapped_text = comment_texts[subj]
-                        ax_text.text(0, y_current, wrapped_text, color='#333333', fontproperties=prop_comment, ha='left', va='top', linespacing=1.6)
+                        wrapped_text = "\n".join(textwrap.wrap(comment_texts[subj], width=55, break_long_words=False))
+                        ax_text.text(0, y_current, wrapped_text, color='#333333', fontproperties=prop_comment, ha='left', va='top', linespacing=1.5)
                         
-                        # คำนวณระยะห่างบรรทัดต่อไปแบบกะระยะ
-                        num_lines = len(wrapped_text.split('\n')) + (len(wrapped_text) // 50)
-                        y_current -= (num_lines * 3.5) + 8
+                        num_lines = len(wrapped_text.split('\n'))
+                        y_current -= (num_lines * 2.8) + 12
 
                     st.pyplot(fig)
                 else: 
