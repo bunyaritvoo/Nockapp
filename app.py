@@ -349,7 +349,6 @@ with tab_dashboard:
 
                     # 🌟 วาดสถิติแยกต่างหากลงใน ax_stats ที่ซ้ายบน 🌟
                     y_stat = 90
-                    ax_stats.text(0, y_stat, "📊 สถิติสาขา", fontproperties=prop_title, color="black", ha='left', va='top')
                     y_stat -= 15
                     for subj in ["คณิตศาสตร์", "วิทยาศาสตร์", "ภาษาอังกฤษ"]:
                         if subj in subjects_taken:
