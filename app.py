@@ -95,25 +95,34 @@ def get_real_comment(subject, total_score, full_score):
             continue
     return "คะแนนไม่อยู่ในเกณฑ์ที่ตั้งไว้"
 
+# ✨ ฟังก์ชันบังคับตัดคำกราฟฉบับปรับปรุง (ไม่กลืนคำว่าอัตนัย)
 def format_radar_label(label):
-    label = str(label).strip()
-    if "ตัวประกอบของจำนวนนับ" in label: return "ตัวประกอบของจำนวนนับ\nห.ร.ม. ค.ร.น."
-    elif "เศษส่วนและเศษซ้อน" in label or "เศษส่วนและเศษส่วนซ้อน" in label: return "เศษส่วนและเศษส่วนซ้อน"
-    elif "เศษส่วนอัตนัย" in label: return "เศษส่วนอัตนัย"
-    elif "ทศนิยมอัตนัย" in label: return "ทศนิยมอัตนัย"
-    elif "ห่วงโซ่อาหาร" in label: return "ห่วงโซ่อาหาร\nและสายใยอาหาร"
-    elif "การเปลี่ยนแปลงของสาร" in label: return "การเปลี่ยนแปลง\nของสาร"
-    elif "การจำแนกสิ่งมีชีวิต" in label: return "การจำแนก\nสิ่งมีชีวิต"
-    elif "ทักษะกระบวนการทางวิทยาศาตร์" in label or "ทักษะกระบวนการทางวิทยาศาสตร์" in label: return "ทักษะกระบวนการ\nทางวิทยาศาสตร์"
-    elif "การกำหนดตัวแปร" in label: return "การกำหนด\nตัวแปร"
-    elif "การสังเคราะห์ด้วยแสง" in label: return "การสังเคราะห์\nด้วยแสง"
-    elif "Demonstrative" in label: return "Demonstrative Pronouns\nThere is/There are\nTense1"
-    elif "Countable" in label and "Uncountable" in label: return "Countable and\nUncountable Nouns"
-    elif "Singular" in label and "Plural" in label: return "Singular &\nPlural Nouns"
-    elif "Auxiliary" in label: return "Auxiliary Verb\nand Modal Verb"
-    elif "Adjectives" in label and "Adverbs" in label: return "Adjectives &\nAdverbs"
-    elif "Has / Have" in label: return "Has / Have /\nHas got / Have got" # เพิ่มการตัดคำจุดนี้ไม่ให้เบียดวิทย์
-    return "\n".join(textwrap.wrap(label, width=22, break_long_words=False))
+    label_str = str(label).strip()
+    is_essay = "อัตนัย" in label_str # เช็คก่อนเลยว่าต้นฉบับมีคำว่าอัตนัยไหม
+    
+    if "ตัวประกอบของจำนวนนับ" in label_str: res = "ตัวประกอบของจำนวนนับ\nห.ร.ม. ค.ร.น."
+    elif "เศษส่วนและเศษซ้อน" in label_str or "เศษส่วนและเศษส่วนซ้อน" in label_str: res = "เศษส่วนและเศษส่วนซ้อน"
+    elif "เศษส่วนอัตนัย" in label_str: res = "เศษส่วนอัตนัย"
+    elif "ทศนิยมอัตนัย" in label_str: res = "ทศนิยมอัตนัย"
+    elif "ห่วงโซ่อาหาร" in label_str: res = "ห่วงโซ่อาหาร\nและสายใยอาหาร"
+    elif "การเปลี่ยนแปลงของสาร" in label_str: res = "การเปลี่ยนแปลง\nของสาร"
+    elif "การจำแนกสิ่งมีชีวิต" in label_str: res = "การจำแนก\nสิ่งมีชีวิต"
+    elif "ทักษะกระบวนการทางวิทยาศาตร์" in label_str or "ทักษะกระบวนการทางวิทยาศาสตร์" in label_str: res = "ทักษะกระบวนการ\nทางวิทยาศาสตร์"
+    elif "การกำหนดตัวแปร" in label_str: res = "การกำหนด\nตัวแปร"
+    elif "การสังเคราะห์ด้วยแสง" in label_str: res = "การสังเคราะห์\nด้วยแสง"
+    elif "Demonstrative" in label_str: res = "Demonstrative Pronouns\nThere is/There are\nTense1"
+    elif "Countable" in label_str and "Uncountable" in label_str: res = "Countable and\nUncountable Nouns"
+    elif "Singular" in label_str and "Plural" in label_str: res = "Singular &\nPlural Nouns"
+    elif "Auxiliary" in label_str: res = "Auxiliary Verb\nand Modal Verb"
+    elif "Adjectives" in label_str and "Adverbs" in label_str: res = "Adjectives &\nAdverbs"
+    elif "Has / Have" in label_str: res = "Has / Have /\nHas got / Have got"
+    else: res = "\n".join(textwrap.wrap(label_str, width=22, break_long_words=False))
+    
+    # ถ้าต้นฉบับมี "อัตนัย" แต่ผลลัพธ์ที่โดนตัดแต่งแล้วไม่มี ให้เติมกลับเข้าไป
+    if is_essay and "อัตนัย" not in res:
+        res += " (อัตนัย)"
+        
+    return res
 
 # ✨ ฟังก์ชันตัดคำภาษาไทยแบบอัจฉริยะ 
 def wrap_thai_text(text, width=65):
@@ -258,14 +267,12 @@ with tab_dashboard:
                     fig = plt.figure(figsize=(18, 12))
                     fig.suptitle(f'รายงานผลการเรียนรู้: {report_student} (เดือน {report_month} ปี {report_year})', fontproperties=prop_header, fontsize=28, y=0.97)
 
-                    # 🌟 1. ลดขนาดกราฟจาก 0.26 เป็น 0.22 และถ่างระยะห่างออกจากกัน 🌟
                     ax_dict = {}
                     if "คณิตศาสตร์" in subjects_taken:
                         ax_dict["คณิตศาสตร์"] = fig.add_axes([0.18, 0.48, 0.22, 0.36], polar=True)
                     if "วิทยาศาสตร์" in subjects_taken:
                         ax_dict["วิทยาศาสตร์"] = fig.add_axes([0.02, 0.08, 0.22, 0.36], polar=True)
                     if "ภาษาอังกฤษ" in subjects_taken:
-                        # ขยับแกนภาษาอังกฤษออกไปทางขวาเพื่อให้พ้นรัศมีป้ายกำกับของวิชาวิทยาศาสตร์
                         ax_dict["ภาษาอังกฤษ"] = fig.add_axes([0.34, 0.08, 0.22, 0.36], polar=True)
 
                     colors = {"คณิตศาสตร์": "blue", "วิทยาศาสตร์": "red", "ภาษาอังกฤษ": "green"}
@@ -275,7 +282,6 @@ with tab_dashboard:
                     ax_stats.set_ylim(0, 100)
                     ax_stats.set_xlim(0, 100)
 
-                    # พื้นที่แสดงผลข้อความ 
                     ax_text = fig.add_axes([0.62, 0.05, 0.36, 0.88])
                     ax_text.axis('off')
                     ax_text.set_ylim(0, 100)
@@ -367,6 +373,7 @@ with tab_dashboard:
                         comment_texts[subj] = (total_score, sum_full_score, calc_percent, fetched_comment)
 
                     y_stat = 90
+                    ax_stats.text(0, y_stat, "📊 สถิติสาขา", fontproperties=prop_title, color="black", ha='left', va='top')
                     y_stat -= 15
                     for subj in ["คณิตศาสตร์", "วิทยาศาสตร์", "ภาษาอังกฤษ"]:
                         if subj in subjects_taken:
@@ -388,7 +395,6 @@ with tab_dashboard:
                             ax_text.text(0, y_current, "ความเห็น:", color='#333333', fontproperties=prop_comment, ha='left', va='top')
                             y_current -= 4
                             
-                            # เรียกใช้ฟังก์ชันตัดคำแบบใหม่
                             wrapped_comment = wrap_thai_text(f_comment, width=65)
                             ax_text.text(0, y_current, wrapped_comment, color='#555555', fontproperties=prop_comment, ha='left', va='top', linespacing=1.6)
                             
