@@ -125,6 +125,16 @@ def format_radar_label(label):
         
     return "\n".join(textwrap.wrap(label, width=22, break_long_words=False))
 
+# ✨ ฟังก์ชันตัดคำอธิบายความเห็น ป้องกันข้อความล้นขอบขวา
+def wrap_thai_text(text, width=52):
+    lines = []
+    for line in str(text).split('\n'):
+        if not line.strip():
+            continue
+        wrapped = textwrap.fill(line, width=width, break_long_words=True)
+        lines.append(wrapped)
+    return '\n'.join(lines)
+
 # --- 4. UI INTERFACE ---
 st.title("🎓 ระบบจัดการคะแนนและรายงานผล")
 tab_entry, tab_dashboard, tab_stat = st.tabs(["📝 บันทึกข้อมูล", "📊 พิมพ์รายงานผล (Report Card)", "📈 สถิติภาพรวม"])
@@ -242,25 +252,24 @@ with tab_dashboard:
 
                 if subjects_taken:
                     fig = plt.figure(figsize=(18, 12))
-                    
-                    # 🌟 จัด Layout แบบรูปที่ 2 (Math ตรงกลางด้านบน) 🌟
-                    fig.subplots_adjust(top=0.88, hspace=0.35, wspace=0.2)
-                    gs = fig.add_gridspec(2, 3, width_ratios=[1, 1, 1.6]) 
                     fig.suptitle(f'รายงานผลการเรียนรู้: {report_student} (เดือน {report_month} ปี {report_year})', fontproperties=prop_header, fontsize=28, y=0.96)
 
+                    # 🌟 1. กำหนดขนาดและพิกัดรูปภาพกราฟวงกลมแต่ละวิชาโดยตรง (ล็อกขนาด ไม่พึ่งพา GridSpec อัตโนมัติ) 🌟
                     ax_dict = {}
                     if "คณิตศาสตร์" in subjects_taken:
-                        # คณิตศาสตร์อยู่แถวบน ควบสองคอลัมน์แรกเพื่อให้แสดงตรงกลางพอดี
-                        ax_dict["คณิตศาสตร์"] = fig.add_subplot(gs[0, 0:2], polar=True)
+                        # คณิตศาสตร์อยู่ตรงกลางด้านบน [X_เริ่ม, Y_เริ่ม, ความกว้าง, ความสูง]
+                        ax_dict["คณิตศาสตร์"] = fig.add_axes([0.17, 0.52, 0.26, 0.36], polar=True)
                     if "วิทยาศาสตร์" in subjects_taken:
-                        ax_dict["วิทยาศาสตร์"] = fig.add_subplot(gs[1, 0], polar=True)
+                        # วิทยาศาสตร์อยู่มุมซ้ายล่าง
+                        ax_dict["วิทยาศาสตร์"] = fig.add_axes([0.04, 0.08, 0.26, 0.36], polar=True)
                     if "ภาษาอังกฤษ" in subjects_taken:
-                        ax_dict["ภาษาอังกฤษ"] = fig.add_subplot(gs[1, 1], polar=True)
+                        # ภาษาอังกฤษอยู่มุมขวาล่าง
+                        ax_dict["ภาษาอังกฤษ"] = fig.add_axes([0.30, 0.08, 0.26, 0.36], polar=True)
 
                     colors = {"คณิตศาสตร์": "blue", "วิทยาศาสตร์": "red", "ภาษาอังกฤษ": "green"}
                     
-                    # พื้นที่แสดงผลข้อความและสถิติ (ฝั่งขวามือ)
-                    ax_text = fig.add_subplot(gs[:, 2])
+                    # 🌟 2. กำหนดพื้นที่วางข้อความทางฝั่งขวามือ 🌟
+                    ax_text = fig.add_axes([0.58, 0.05, 0.40, 0.88])
                     ax_text.axis('off')
                     ax_text.set_ylim(0, 100)
                     ax_text.set_xlim(0, 100)
@@ -350,25 +359,34 @@ with tab_dashboard:
 
                         fetched_comment = get_real_comment(subj, total_score, sum_full_score)
                         
-                        # 🌟 ฝังข้อมูลสถิติรวมเข้าไปในกล่องข้อความความเห็นประจำวิชา 🌟
-                        comment_texts[subj] = f"คะแนนรวม: {total_score}/{sum_full_score} (คิดเป็น {calc_percent:.1f}%)\nสถิติสาขา: {stats_texts[subj]}\nความเห็น:\n{fetched_comment}"
+                        # เก็บข้อมูลดิบไว้แสดงผลแยกบรรทัดฝั่งขวา
+                        comment_texts[subj] = (total_score, sum_full_score, calc_percent, fetched_comment)
 
-                    for subj, ax in ax_dict.items():
-                        if subj not in subjects_taken: 
-                            ax.axis('off')
-                    
-                    # 🌟 วาดข้อความรายงานผลและสถิติด้านขวามือ 🌟
+                    # 🌟 3. ลูปพิมพ์ข้อความและตัดคำเมื่อข้อความเกินขอบพร้อมใส่ผลสถิติ 🌟
                     y_current = 98 
                     for subj in ["คณิตศาสตร์", "วิทยาศาสตร์", "ภาษาอังกฤษ"]:
                         if subj in subjects_taken:
+                            # หัวข้อวิชา
                             ax_text.text(0, y_current, f"รายงานผล: {subj}", color=colors.get(subj, "black"), fontproperties=prop_title, ha='left', va='top')
                             y_current -= 4 
                             
-                            wrapped_text = comment_texts[subj]
-                            ax_text.text(0, y_current, wrapped_text, color='#333333', fontproperties=prop_comment, ha='left', va='top', linespacing=1.6)
+                            # คะแนนรวมและสถิติ Max/Min/Ave
+                            t_score, f_score, p_calc, f_comment = comment_texts[subj]
+                            score_stat_line = f"คะแนนรวม: {t_score}/{f_score} (คิดเป็น {p_calc:.1f}%)    [ สถิติสาขา -> {stats_texts[subj]} ]"
+                            ax_text.text(0, y_current, score_stat_line, color='#333333', fontproperties=prop_comment, ha='left', va='top')
+                            y_current -= 4
                             
-                            num_lines = len(wrapped_text.split('\n')) + (len(wrapped_text) // 60)
-                            y_current -= (num_lines * 3) + 9
+                            # หัวข้อความเห็น
+                            ax_text.text(0, y_current, "ความเห็น:", color='#333333', fontproperties=prop_comment, ha='left', va='top')
+                            y_current -= 4
+                            
+                            # เนื้อหาความเห็น (บังคับตัดคำปัดลงบรรทัดใหม่เมื่อยาวเกินขอบขวา)
+                            wrapped_comment = wrap_thai_text(f_comment, width=52)
+                            ax_text.text(0, y_current, wrapped_comment, color='#555555', fontproperties=prop_comment, ha='left', va='top', linespacing=1.6)
+                            
+                            # คำนวณจำนวนบรรทัดของข้อความที่ถูกตัดคำ เพื่อเลื่อนตำแหน่ง y_current ลงมาเผื่อให้วิชาถัดไปอย่างถูกต้อง
+                            num_lines = len(wrapped_comment.split('\n'))
+                            y_current -= (num_lines * 3.2) + 6
 
                     st.pyplot(fig)
                 else: 
