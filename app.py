@@ -88,50 +88,31 @@ def get_real_comment(subject, total_score, full_score):
             continue
     return "คะแนนไม่อยู่ในเกณฑ์ที่ตั้งไว้"
 
-# ✨ ฟังก์ชันบังคับตัดคำกราฟ ป้องกันคำฉีกและชนขอบ
 def format_radar_label(label):
     label = str(label).strip()
-    
-    if "ตัวประกอบของจำนวนนับ" in label:
-        return "ตัวประกอบของจำนวนนับ\nห.ร.ม. ค.ร.น."
-    elif "เศษส่วนและเศษซ้อน" in label or "เศษส่วนและเศษส่วนซ้อน" in label:
-        return "เศษส่วนและเศษส่วนซ้อน"
-    elif "เศษส่วนอัตนัย" in label:
-        return "เศษส่วนอัตนัย"
-    elif "ทศนิยมอัตนัย" in label:
-        return "ทศนิยมอัตนัย"
-        
-    elif "ห่วงโซ่อาหาร" in label:
-        return "ห่วงโซ่อาหาร\nและสายใยอาหาร"
-    elif "การเปลี่ยนแปลงของสาร" in label:
-        return "การเปลี่ยนแปลง\nของสาร"
-    elif "การจำแนกสิ่งมีชีวิต" in label:
-        return "การจำแนก\nสิ่งมีชีวิต"
-    elif "ทักษะกระบวนการทางวิทยาศาตร์" in label or "ทักษะกระบวนการทางวิทยาศาสตร์" in label:
-        return "ทักษะกระบวนการ\nทางวิทยาศาสตร์"
-    elif "การกำหนดตัวแปร" in label:
-        return "การกำหนด\nตัวแปร"
-    elif "การสังเคราะห์ด้วยแสง" in label:
-        return "การสังเคราะห์\nด้วยแสง"
-        
-    elif "Demonstrative" in label:
-        return "Demonstrative Pronouns\nThere is/There are\nTense1"
-    elif "Countable" in label and "Uncountable" in label:
-        return "Countable and\nUncountable Nouns"
-    elif "Singular" in label and "Plural" in label:
-        return "Singular &\nPlural Nouns"
-    elif "Auxiliary" in label:
-        return "Auxiliary Verb\nand Modal Verb"
-        
+    if "ตัวประกอบของจำนวนนับ" in label: return "ตัวประกอบของจำนวนนับ\nห.ร.ม. ค.ร.น."
+    elif "เศษส่วนและเศษซ้อน" in label or "เศษส่วนและเศษส่วนซ้อน" in label: return "เศษส่วนและเศษส่วนซ้อน"
+    elif "เศษส่วนอัตนัย" in label: return "เศษส่วนอัตนัย"
+    elif "ทศนิยมอัตนัย" in label: return "ทศนิยมอัตนัย"
+    elif "ห่วงโซ่อาหาร" in label: return "ห่วงโซ่อาหาร\nและสายใยอาหาร"
+    elif "การเปลี่ยนแปลงของสาร" in label: return "การเปลี่ยนแปลง\nของสาร"
+    elif "การจำแนกสิ่งมีชีวิต" in label: return "การจำแนก\nสิ่งมีชีวิต"
+    elif "ทักษะกระบวนการทางวิทยาศาตร์" in label or "ทักษะกระบวนการทางวิทยาศาสตร์" in label: return "ทักษะกระบวนการ\nทางวิทยาศาสตร์"
+    elif "การกำหนดตัวแปร" in label: return "การกำหนด\nตัวแปร"
+    elif "การสังเคราะห์ด้วยแสง" in label: return "การสังเคราะห์\nด้วยแสง"
+    elif "Demonstrative" in label: return "Demonstrative Pronouns\nThere is/There are\nTense1"
+    elif "Countable" in label and "Uncountable" in label: return "Countable and\nUncountable Nouns"
+    elif "Singular" in label and "Plural" in label: return "Singular &\nPlural Nouns"
+    elif "Auxiliary" in label: return "Auxiliary Verb\nand Modal Verb"
     return "\n".join(textwrap.wrap(label, width=22, break_long_words=False))
 
-# ✨ ฟังก์ชันตัดคำอธิบายความเห็น ป้องกันข้อความล้นขอบขวา
-def wrap_thai_text(text, width=52):
+# ✨ ฟังก์ชันตัดคำใหม่: ปิด break_long_words เพื่อไม่ให้ตัดกลางตัวอักษรไทย
+def wrap_thai_text(text, width=60):
     lines = []
     for line in str(text).split('\n'):
         if not line.strip():
             continue
-        wrapped = textwrap.fill(line, width=width, break_long_words=True)
+        wrapped = textwrap.fill(line, width=width, break_long_words=False)
         lines.append(wrapped)
     return '\n'.join(lines)
 
@@ -252,24 +233,29 @@ with tab_dashboard:
 
                 if subjects_taken:
                     fig = plt.figure(figsize=(18, 12))
-                    fig.suptitle(f'รายงานผลการเรียนรู้: {report_student} (เดือน {report_month} ปี {report_year})', fontproperties=prop_header, fontsize=28, y=0.96)
+                    # ขยับหัวข้อหลักขึ้นไปให้สุด เพื่อไม่ให้ทับคณิตศาสตร์
+                    fig.suptitle(f'รายงานผลการเรียนรู้: {report_student} (เดือน {report_month} ปี {report_year})', fontproperties=prop_header, fontsize=28, y=0.97)
 
-                    # 🌟 1. กำหนดขนาดและพิกัดรูปภาพกราฟวงกลมแต่ละวิชาโดยตรง (ล็อกขนาด ไม่พึ่งพา GridSpec อัตโนมัติ) 🌟
+                    # 🌟 1. ปรับพิกัดแกนกราฟและกล่องข้อความใหม่ทั้งหมด 🌟
                     ax_dict = {}
                     if "คณิตศาสตร์" in subjects_taken:
-                        # คณิตศาสตร์อยู่ตรงกลางด้านบน [X_เริ่ม, Y_เริ่ม, ความกว้าง, ความสูง]
-                        ax_dict["คณิตศาสตร์"] = fig.add_axes([0.17, 0.52, 0.26, 0.36], polar=True)
+                        # ลดพิกัดแกน Y เริ่มต้นลงมา เพื่อกันพื้นที่ให้ชื่อวิชาไม่ชนหัวข้อหลัก
+                        ax_dict["คณิตศาสตร์"] = fig.add_axes([0.22, 0.48, 0.26, 0.36], polar=True)
                     if "วิทยาศาสตร์" in subjects_taken:
-                        # วิทยาศาสตร์อยู่มุมซ้ายล่าง
-                        ax_dict["วิทยาศาสตร์"] = fig.add_axes([0.04, 0.08, 0.26, 0.36], polar=True)
+                        ax_dict["วิทยาศาสตร์"] = fig.add_axes([0.05, 0.08, 0.26, 0.36], polar=True)
                     if "ภาษาอังกฤษ" in subjects_taken:
-                        # ภาษาอังกฤษอยู่มุมขวาล่าง
-                        ax_dict["ภาษาอังกฤษ"] = fig.add_axes([0.30, 0.08, 0.26, 0.36], polar=True)
+                        ax_dict["ภาษาอังกฤษ"] = fig.add_axes([0.35, 0.08, 0.26, 0.36], polar=True)
 
                     colors = {"คณิตศาสตร์": "blue", "วิทยาศาสตร์": "red", "ภาษาอังกฤษ": "green"}
                     
-                    # 🌟 2. กำหนดพื้นที่วางข้อความทางฝั่งขวามือ 🌟
-                    ax_text = fig.add_axes([0.58, 0.05, 0.40, 0.88])
+                    # 🌟 2. เพิ่มกล่องสถิติแยกไว้ที่พื้นที่ว่างมุมซ้ายบน 🌟
+                    ax_stats = fig.add_axes([0.02, 0.65, 0.18, 0.25])
+                    ax_stats.axis('off')
+                    ax_stats.set_ylim(0, 100)
+                    ax_stats.set_xlim(0, 100)
+
+                    # พื้นที่แสดงผลข้อความด้านขวา
+                    ax_text = fig.add_axes([0.62, 0.05, 0.35, 0.88])
                     ax_text.axis('off')
                     ax_text.set_ylim(0, 100)
                     ax_text.set_xlim(0, 100)
@@ -314,7 +300,7 @@ with tab_dashboard:
                         sum_full_score = sum(t_fulls)
                         calc_percent = (total_score / sum_full_score) * 100 if sum_full_score > 0 else 0.0
 
-                        # 🌟 ดึงข้อมูลสถิติประจำสาขา (Max, Min, Mean) 🌟
+                        # คำนวณข้อมูลสถิติ
                         mask = (df_report.iloc[:, 1].astype(str).str.strip() == subj) & (df_report.iloc[:, 4].astype(str).str.strip() == student_branch_val)
                         peer_data = df_report[mask]
                         
@@ -333,7 +319,7 @@ with tab_dashboard:
                             stat_min = min(peer_totals)
                             stat_max = max(peer_totals)
                             stat_mean = sum(peer_totals) / len(peer_totals)
-                            stats_texts[subj] = f"Max: {stat_max:g}   |   Min: {stat_min:g}   |   Ave: {stat_mean:.1f}"
+                            stats_texts[subj] = f"Max: {stat_max:g} | Min: {stat_min:g} | Ave: {stat_mean:.1f}"
                         else:
                             stats_texts[subj] = "ไม่มีข้อมูลสถิติ"
 
@@ -355,36 +341,41 @@ with tab_dashboard:
                         ax.plot(angles, scores_norm, color=line_color, linewidth=2)
                         ax.fill(angles, scores_norm, color=line_color, alpha=0.25)
                         
-                        ax.set_title(f"วิชา {subj}", color=line_color, y=1.15, fontproperties=prop_title)
+                        # ลดตำแหน่ง y ของชื่อวิชาลงมาเล็กน้อย
+                        ax.set_title(f"วิชา {subj}", color=line_color, y=1.12, fontproperties=prop_title)
 
                         fetched_comment = get_real_comment(subj, total_score, sum_full_score)
-                        
-                        # เก็บข้อมูลดิบไว้แสดงผลแยกบรรทัดฝั่งขวา
                         comment_texts[subj] = (total_score, sum_full_score, calc_percent, fetched_comment)
 
-                    # 🌟 3. ลูปพิมพ์ข้อความและตัดคำเมื่อข้อความเกินขอบพร้อมใส่ผลสถิติ 🌟
+                    # 🌟 3. วาดสถิติแยกต่างหากลงใน ax_stats ที่ซ้ายบน 🌟
+                    y_stat = 90
+                    ax_stats.text(0, y_stat, "📊 สถิติสาขา", fontproperties=prop_title, color="black", ha='left', va='top')
+                    y_stat -= 15
+                    for subj in ["คณิตศาสตร์", "วิทยาศาสตร์", "ภาษาอังกฤษ"]:
+                        if subj in subjects_taken:
+                            ax_stats.text(0, y_stat, f"• {subj}", fontproperties=prop_title, color=colors.get(subj, "black"), ha='left', va='top')
+                            ax_stats.text(5, y_stat - 12, stats_texts[subj], fontproperties=prop_comment, color='#555555', ha='left', va='top')
+                            y_stat -= 25
+
+                    # 🌟 4. วาดข้อความทางขวา โดยไม่ต้องมีสถิติปนแล้ว 🌟
                     y_current = 98 
                     for subj in ["คณิตศาสตร์", "วิทยาศาสตร์", "ภาษาอังกฤษ"]:
                         if subj in subjects_taken:
-                            # หัวข้อวิชา
                             ax_text.text(0, y_current, f"รายงานผล: {subj}", color=colors.get(subj, "black"), fontproperties=prop_title, ha='left', va='top')
                             y_current -= 4 
                             
-                            # คะแนนรวมและสถิติ Max/Min/Ave
                             t_score, f_score, p_calc, f_comment = comment_texts[subj]
-                            score_stat_line = f"คะแนนรวม: {t_score}/{f_score} (คิดเป็น {p_calc:.1f}%)    [ สถิติสาขา -> {stats_texts[subj]} ]"
-                            ax_text.text(0, y_current, score_stat_line, color='#333333', fontproperties=prop_comment, ha='left', va='top')
+                            score_line = f"คะแนนรวม: {t_score}/{f_score} (คิดเป็น {p_calc:.1f}%)"
+                            ax_text.text(0, y_current, score_line, color='#333333', fontproperties=prop_comment, ha='left', va='top')
                             y_current -= 4
                             
-                            # หัวข้อความเห็น
                             ax_text.text(0, y_current, "ความเห็น:", color='#333333', fontproperties=prop_comment, ha='left', va='top')
                             y_current -= 4
                             
-                            # เนื้อหาความเห็น (บังคับตัดคำปัดลงบรรทัดใหม่เมื่อยาวเกินขอบขวา)
-                            wrapped_comment = wrap_thai_text(f_comment, width=52)
+                            # เรียกใช้ฟังก์ชันตัดคำแบบใหม่
+                            wrapped_comment = wrap_thai_text(f_comment, width=65)
                             ax_text.text(0, y_current, wrapped_comment, color='#555555', fontproperties=prop_comment, ha='left', va='top', linespacing=1.6)
                             
-                            # คำนวณจำนวนบรรทัดของข้อความที่ถูกตัดคำ เพื่อเลื่อนตำแหน่ง y_current ลงมาเผื่อให้วิชาถัดไปอย่างถูกต้อง
                             num_lines = len(wrapped_comment.split('\n'))
                             y_current -= (num_lines * 3.2) + 6
 
