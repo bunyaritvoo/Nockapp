@@ -8,6 +8,13 @@ import gspread
 import os
 import textwrap
 
+# ✨ พยายามโหลด pythainlp สำหรับตัดคำภาษาไทย
+try:
+    from pythainlp.tokenize import word_tokenize
+    HAS_PYTHAINLP = True
+except ImportError:
+    HAS_PYTHAINLP = False
+
 # --- 1. CONFIGURATION ---
 st.set_page_config(page_title="ระบบบันทึกคะแนนติวเข้าม.1", layout="wide") 
 SPREADSHEET_URL = "https://docs.google.com/spreadsheets/d/1ny5m5Yq4V269FdZemV105cDPeVUcp9sGjOyVAbbnA0Q/edit"
@@ -104,17 +111,32 @@ def format_radar_label(label):
     elif "Countable" in label and "Uncountable" in label: return "Countable and\nUncountable Nouns"
     elif "Singular" in label and "Plural" in label: return "Singular &\nPlural Nouns"
     elif "Auxiliary" in label: return "Auxiliary Verb\nand Modal Verb"
-    elif "Adjectives" in label and "Adverbs" in label: return "Adjectives &\nAdverbs" # ✨ บังคับตัดคำจุดที่ล้นขอบ
+    elif "Adjectives" in label and "Adverbs" in label: return "Adjectives &\nAdverbs"
+    elif "Has / Have" in label: return "Has / Have /\nHas got / Have got" # เพิ่มการตัดคำจุดนี้ไม่ให้เบียดวิทย์
     return "\n".join(textwrap.wrap(label, width=22, break_long_words=False))
 
-# ✨ ฟังก์ชันตัดคำใหม่: ปิด break_long_words เพื่อไม่ให้ตัดกลางตัวอักษรไทย
-def wrap_thai_text(text, width=60):
+# ✨ ฟังก์ชันตัดคำภาษาไทยแบบอัจฉริยะ 
+def wrap_thai_text(text, width=65):
+    if not text: return ""
     lines = []
     for line in str(text).split('\n'):
         if not line.strip():
             continue
-        wrapped = textwrap.fill(line, width=width, break_long_words=False)
-        lines.append(wrapped)
+        if HAS_PYTHAINLP:
+            words = word_tokenize(line)
+            current_line = ""
+            for w in words:
+                if len(current_line) + len(w) > width:
+                    lines.append(current_line)
+                    current_line = w
+                else:
+                    current_line += w
+            if current_line:
+                lines.append(current_line)
+        else:
+            # Fallback หากไม่ได้ติดตั้ง pythainlp จะบังคับตัดเพื่อไม่ให้ล้นขอบจอ
+            wrapped = textwrap.fill(line, width=width, break_long_words=True)
+            lines.append(wrapped)
     return '\n'.join(lines)
 
 # --- 4. UI INTERFACE ---
@@ -236,26 +258,25 @@ with tab_dashboard:
                     fig = plt.figure(figsize=(18, 12))
                     fig.suptitle(f'รายงานผลการเรียนรู้: {report_student} (เดือน {report_month} ปี {report_year})', fontproperties=prop_header, fontsize=28, y=0.97)
 
-                    # 🌟 1. ปรับพิกัดแกนกราฟใหม่ ขยับหลบข้อความไปทางซ้าย 🌟
+                    # 🌟 1. ลดขนาดกราฟจาก 0.26 เป็น 0.22 และถ่างระยะห่างออกจากกัน 🌟
                     ax_dict = {}
                     if "คณิตศาสตร์" in subjects_taken:
-                        ax_dict["คณิตศาสตร์"] = fig.add_axes([0.18, 0.48, 0.26, 0.36], polar=True)
+                        ax_dict["คณิตศาสตร์"] = fig.add_axes([0.18, 0.48, 0.22, 0.36], polar=True)
                     if "วิทยาศาสตร์" in subjects_taken:
-                        ax_dict["วิทยาศาสตร์"] = fig.add_axes([0.02, 0.08, 0.26, 0.36], polar=True)
+                        ax_dict["วิทยาศาสตร์"] = fig.add_axes([0.02, 0.08, 0.22, 0.36], polar=True)
                     if "ภาษาอังกฤษ" in subjects_taken:
-                        # ถอยกราฟภาษาอังกฤษไปทางซ้ายอีกหน่อย
-                        ax_dict["ภาษาอังกฤษ"] = fig.add_axes([0.31, 0.08, 0.26, 0.36], polar=True)
+                        # ขยับแกนภาษาอังกฤษออกไปทางขวาเพื่อให้พ้นรัศมีป้ายกำกับของวิชาวิทยาศาสตร์
+                        ax_dict["ภาษาอังกฤษ"] = fig.add_axes([0.34, 0.08, 0.22, 0.36], polar=True)
 
                     colors = {"คณิตศาสตร์": "blue", "วิทยาศาสตร์": "red", "ภาษาอังกฤษ": "green"}
                     
-                    # 🌟 2. เพิ่มกล่องสถิติแยกไว้ที่พื้นที่ว่างมุมซ้ายบน 🌟
                     ax_stats = fig.add_axes([0.02, 0.65, 0.18, 0.25])
                     ax_stats.axis('off')
                     ax_stats.set_ylim(0, 100)
                     ax_stats.set_xlim(0, 100)
 
-                    # 🌟 3. พื้นที่แสดงผลข้อความ ขยับพิกัด X ให้ถอยไปทางขวา 🌟
-                    ax_text = fig.add_axes([0.65, 0.05, 0.34, 0.88])
+                    # พื้นที่แสดงผลข้อความ 
+                    ax_text = fig.add_axes([0.62, 0.05, 0.36, 0.88])
                     ax_text.axis('off')
                     ax_text.set_ylim(0, 100)
                     ax_text.set_xlim(0, 100)
@@ -300,7 +321,6 @@ with tab_dashboard:
                         sum_full_score = sum(t_fulls)
                         calc_percent = (total_score / sum_full_score) * 100 if sum_full_score > 0 else 0.0
 
-                        # คำนวณข้อมูลสถิติ
                         mask = (df_report.iloc[:, 1].astype(str).str.strip() == subj) & (df_report.iloc[:, 4].astype(str).str.strip() == student_branch_val)
                         peer_data = df_report[mask]
                         
@@ -341,14 +361,13 @@ with tab_dashboard:
                         ax.plot(angles, scores_norm, color=line_color, linewidth=2)
                         ax.fill(angles, scores_norm, color=line_color, alpha=0.25)
                         
-                        # ลดตำแหน่ง y ของชื่อวิชาลงมาเล็กน้อย
                         ax.set_title(f"วิชา {subj}", color=line_color, y=1.12, fontproperties=prop_title)
 
                         fetched_comment = get_real_comment(subj, total_score, sum_full_score)
                         comment_texts[subj] = (total_score, sum_full_score, calc_percent, fetched_comment)
 
-                    # 🌟 วาดสถิติแยกต่างหากลงใน ax_stats ที่ซ้ายบน 🌟
                     y_stat = 90
+                    ax_stats.text(0, y_stat, "📊 สถิติสาขา", fontproperties=prop_title, color="black", ha='left', va='top')
                     y_stat -= 15
                     for subj in ["คณิตศาสตร์", "วิทยาศาสตร์", "ภาษาอังกฤษ"]:
                         if subj in subjects_taken:
@@ -356,7 +375,6 @@ with tab_dashboard:
                             ax_stats.text(5, y_stat - 12, stats_texts[subj], fontproperties=prop_comment, color='#555555', ha='left', va='top')
                             y_stat -= 25
 
-                    # 🌟 วาดข้อความทางขวา 🌟
                     y_current = 98 
                     for subj in ["คณิตศาสตร์", "วิทยาศาสตร์", "ภาษาอังกฤษ"]:
                         if subj in subjects_taken:
@@ -371,7 +389,7 @@ with tab_dashboard:
                             ax_text.text(0, y_current, "ความเห็น:", color='#333333', fontproperties=prop_comment, ha='left', va='top')
                             y_current -= 4
                             
-                            # เรียกใช้ฟังก์ชันตัดคำ
+                            # เรียกใช้ฟังก์ชันตัดคำแบบใหม่
                             wrapped_comment = wrap_thai_text(f_comment, width=65)
                             ax_text.text(0, y_current, wrapped_comment, color='#555555', fontproperties=prop_comment, ha='left', va='top', linespacing=1.6)
                             
