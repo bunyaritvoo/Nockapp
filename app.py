@@ -46,7 +46,6 @@ if not gc:
     st.error("🚨 เชื่อมต่อ Google API ไม่ได้")
     st.stop()
 
-# ✨ เพิ่มระบบ Cache ข้อมูลหลักเพื่อป้องกัน API Rate Limit ตอนเลือก Dropdown
 @st.cache_data(ttl=600)
 def load_core_data():
     _sh = gc.open_by_url(SPREADSHEET_URL)
@@ -89,21 +88,19 @@ def get_real_comment(subject, total_score, full_score):
             continue
     return "คะแนนไม่อยู่ในเกณฑ์ที่ตั้งไว้"
 
-# ✨ ฟังก์ชันบังคับตัดคำในกราฟเรดาร์ ป้องกันคำฉีกและล้นขอบรูป
+# ✨ ฟังก์ชันบังคับตัดคำกราฟ ป้องกันคำฉีกและชนขอบ
 def format_radar_label(label):
     label = str(label).strip()
     
-    # 📐 หมวดคณิตศาสตร์
     if "ตัวประกอบของจำนวนนับ" in label:
         return "ตัวประกอบของจำนวนนับ\nห.ร.ม. ค.ร.น."
     elif "เศษส่วนและเศษซ้อน" in label or "เศษส่วนและเศษส่วนซ้อน" in label:
-        return "เศษส่วนและเศษส่วนซ้อน" 
+        return "เศษส่วนและเศษส่วนซ้อน"
     elif "เศษส่วนอัตนัย" in label:
-        return "เศษส่วนอัตนัย" 
+        return "เศษส่วนอัตนัย"
     elif "ทศนิยมอัตนัย" in label:
         return "ทศนิยมอัตนัย"
         
-    # 🔬 หมวดวิทยาศาสตร์
     elif "ห่วงโซ่อาหาร" in label:
         return "ห่วงโซ่อาหาร\nและสายใยอาหาร"
     elif "การเปลี่ยนแปลงของสาร" in label:
@@ -117,7 +114,6 @@ def format_radar_label(label):
     elif "การสังเคราะห์ด้วยแสง" in label:
         return "การสังเคราะห์\nด้วยแสง"
         
-    # 📝 หมวดภาษาอังกฤษ
     elif "Demonstrative" in label:
         return "Demonstrative Pronouns\nThere is/There are\nTense1"
     elif "Countable" in label and "Uncountable" in label:
@@ -133,9 +129,6 @@ def format_radar_label(label):
 st.title("🎓 ระบบจัดการคะแนนและรายงานผล")
 tab_entry, tab_dashboard, tab_stat = st.tabs(["📝 บันทึกข้อมูล", "📊 พิมพ์รายงานผล (Report Card)", "📈 สถิติภาพรวม"])
 
-# ==========================================
-# 🌟 TAB 1: บันทึกข้อมูล
-# ==========================================
 with tab_entry:
     col_form, col_table = st.columns([1, 1.3])
     with col_form:
@@ -217,9 +210,6 @@ with tab_entry:
                 display_df = display_df[display_df.iloc[:, 4] == selected_branch]
             st.dataframe(display_df, use_container_width=True, height=600)
 
-# ==========================================
-# 🌟 TAB 2: กราฟ + ดึงคอมเมนต์อัตโนมัติตามช่วงคะแนน
-# ==========================================
 with tab_dashboard:
     col_rep1, col_rep2 = st.columns(2)
     with col_rep1:
@@ -253,18 +243,24 @@ with tab_dashboard:
                 if subjects_taken:
                     fig = plt.figure(figsize=(18, 12))
                     
-                    # 🌟 1. จัด Layout แบบรูปที่ 2 (ไม่มีสถิติตรงกลาง) 🌟
-                    fig.subplots_adjust(top=0.85, hspace=0.3, wspace=0.2)
-                    gs = fig.add_gridspec(2, 3, width_ratios=[1, 1, 1.5]) 
+                    # 🌟 จัด Layout แบบดั้งเดิม (มีสถิติตรงกลาง) 🌟
+                    fig.subplots_adjust(top=0.85, hspace=0.35, wspace=0.35)
+                    gs = fig.add_gridspec(2, 3, width_ratios=[1, 1, 1.4]) 
                     fig.suptitle(f'รายงานผลการเรียนรู้: {report_student} (เดือน {report_month} ปี {report_year})', fontproperties=prop_header, fontsize=28, y=0.96)
 
                     ax_dict = {}
                     if "คณิตศาสตร์" in subjects_taken:
-                        ax_dict["คณิตศาสตร์"] = fig.add_subplot(gs[0, 0:2], polar=True)
+                        ax_dict["คณิตศาสตร์"] = fig.add_subplot(gs[0, 0], polar=True)
                     if "วิทยาศาสตร์" in subjects_taken:
                         ax_dict["วิทยาศาสตร์"] = fig.add_subplot(gs[1, 0], polar=True)
                     if "ภาษาอังกฤษ" in subjects_taken:
                         ax_dict["ภาษาอังกฤษ"] = fig.add_subplot(gs[1, 1], polar=True)
+
+                    # 🌟 ช่องสำหรับสถิติ Max, Min, Ave 🌟
+                    ax_stats = fig.add_subplot(gs[0, 1])
+                    ax_stats.axis('off')
+                    ax_stats.set_ylim(0, 100)
+                    ax_stats.set_xlim(0, 100)
 
                     colors = {"คณิตศาสตร์": "blue", "วิทยาศาสตร์": "red", "ภาษาอังกฤษ": "green"}
                     
@@ -274,6 +270,7 @@ with tab_dashboard:
                     ax_text.set_xlim(0, 100)
                     
                     comment_texts = {}
+                    stats_texts = {}
 
                     for subj in subjects_taken:
                         if subj not in ax_dict: 
@@ -312,6 +309,29 @@ with tab_dashboard:
                         sum_full_score = sum(t_fulls)
                         calc_percent = (total_score / sum_full_score) * 100 if sum_full_score > 0 else 0.0
 
+                        # 🌟 ดึงข้อมูลสถิติ (Max, Min, Mean) 🌟
+                        mask = (df_report.iloc[:, 1].astype(str).str.strip() == subj) & (df_report.iloc[:, 4].astype(str).str.strip() == student_branch_val)
+                        peer_data = df_report[mask]
+                        
+                        peer_totals = []
+                        for _, prow in peer_data.iterrows():
+                            p_scores = []
+                            for idx in range(len(t_labels)):
+                                try:
+                                    val_s = str(prow.iloc[5 + idx]).strip()
+                                    p_scores.append(float(val_s) if val_s else 0.0)
+                                except:
+                                    p_scores.append(0.0)
+                            peer_totals.append(sum(p_scores))
+                            
+                        if peer_totals:
+                            stat_min = min(peer_totals)
+                            stat_max = max(peer_totals)
+                            stat_mean = sum(peer_totals) / len(peer_totals)
+                            stats_texts[subj] = f"Max: {stat_max:g}   |   Min: {stat_min:g}   |   Ave: {stat_mean:.1f}"
+                        else:
+                            stats_texts[subj] = "ไม่มีข้อมูลสถิติ"
+
                         num_vars = len(t_labels)
                         angles = [n / float(num_vars) * 2 * np.pi for n in range(num_vars)]
                         angles += angles[:1]
@@ -330,7 +350,7 @@ with tab_dashboard:
                         ax.plot(angles, scores_norm, color=line_color, linewidth=2)
                         ax.fill(angles, scores_norm, color=line_color, alpha=0.25)
                         
-                        ax.set_title(f"วิชา {subj}", color=line_color, y=1.1, fontproperties=prop_title)
+                        ax.set_title(f"วิชา {subj}", color=line_color, y=1.15, fontproperties=prop_title)
 
                         fetched_comment = get_real_comment(subj, total_score, sum_full_score)
                         comment_texts[subj] = f"คะแนนรวม: {total_score}/{sum_full_score} (คิดเป็น {calc_percent:.1f}%)\nความเห็น:\n{fetched_comment}"
@@ -339,27 +359,25 @@ with tab_dashboard:
                         if subj not in subjects_taken: 
                             ax.axis('off')
                     
-                    # 🌟 2. ดันข้อความวิทยาศาสตร์/อังกฤษ ให้ย่อหน้าเข้ามา 🌟
-                    y_current = 90 
+                    # 🌟 วาดกล่องสถิติตรงกลาง 🌟
+                    y_stat = 85
+                    ax_stats.text(0, y_stat+10, "📊 สถิติสาขา", fontproperties=prop_title, color="black", ha='left', va='top')
                     for subj in ["คณิตศาสตร์", "วิทยาศาสตร์", "ภาษาอังกฤษ"]:
                         if subj in subjects_taken:
-                            x_pos = 0 # ตำแหน่งเริ่มต้นชิดซ้าย
-                            
-                            # ปรับการดันข้อความลงและดันไปทางขวา (ย่อหน้า)
-                            if subj == "วิทยาศาสตร์":
-                                y_current -= 6
-                                x_pos = 5 # ดันข้อความเข้ามา
-                            elif subj == "ภาษาอังกฤษ":
-                                y_current -= 6
-                                x_pos = 5 # ดันข้อความเข้ามา
-
-                            ax_text.text(x_pos, y_current, f"รายงานผล: {subj}", color=colors.get(subj, "black"), fontproperties=prop_title, ha='left', va='top')
+                            ax_stats.text(0, y_stat, f"• {subj}", fontproperties=prop_title, color=colors.get(subj, "black"), ha='left', va='top')
+                            ax_stats.text(5, y_stat - 12, stats_texts[subj], fontproperties=prop_comment, color='#555555', ha='left', va='top')
+                            y_stat -= 28 
+                    
+                    # 🌟 วาดข้อความรายงานผลด้านขวามือ 🌟
+                    y_current = 98 
+                    for subj in ["คณิตศาสตร์", "วิทยาศาสตร์", "ภาษาอังกฤษ"]:
+                        if subj in subjects_taken:
+                            ax_text.text(0, y_current, f"รายงานผล: {subj}", color=colors.get(subj, "black"), fontproperties=prop_title, ha='left', va='top')
                             y_current -= 4 
                             
                             wrapped_text = comment_texts[subj]
                             
-                            # 🌟 3. ยกเลิกการใช้ textwrap แสดงข้อความภาษาไทยตรงๆ ไม่ให้สระลอย/ฉีก 🌟
-                            ax_text.text(x_pos, y_current, wrapped_text, color='#333333', fontproperties=prop_comment, ha='left', va='top', linespacing=1.6)
+                            ax_text.text(0, y_current, wrapped_text, color='#333333', fontproperties=prop_comment, ha='left', va='top', linespacing=1.6)
                             
                             num_lines = len(wrapped_text.split('\n')) + (len(wrapped_text) // 60)
                             y_current -= (num_lines * 3) + 8
@@ -370,9 +388,6 @@ with tab_dashboard:
         else:
             st.warning(f"ไม่มีข้อมูลการสอบของนักเรียนในปีการศึกษา {report_year} สำหรับเดือน {report_month}")
 
-# ==========================================
-# 🌟 TAB 3: สถิติภาพรวม
-# ==========================================
 with tab_stat:
     col_stat1, col_stat2 = st.columns(2)
     with col_stat1:
