@@ -243,27 +243,23 @@ with tab_dashboard:
                 if subjects_taken:
                     fig = plt.figure(figsize=(18, 12))
                     
-                    # 🌟 จัด Layout แบบดั้งเดิม (มีสถิติตรงกลาง) 🌟
-                    fig.subplots_adjust(top=0.85, hspace=0.35, wspace=0.35)
-                    gs = fig.add_gridspec(2, 3, width_ratios=[1, 1, 1.4]) 
+                    # 🌟 จัด Layout แบบรูปที่ 2 (Math ตรงกลางด้านบน) 🌟
+                    fig.subplots_adjust(top=0.88, hspace=0.35, wspace=0.2)
+                    gs = fig.add_gridspec(2, 3, width_ratios=[1, 1, 1.6]) 
                     fig.suptitle(f'รายงานผลการเรียนรู้: {report_student} (เดือน {report_month} ปี {report_year})', fontproperties=prop_header, fontsize=28, y=0.96)
 
                     ax_dict = {}
                     if "คณิตศาสตร์" in subjects_taken:
-                        ax_dict["คณิตศาสตร์"] = fig.add_subplot(gs[0, 0], polar=True)
+                        # คณิตศาสตร์อยู่แถวบน ควบสองคอลัมน์แรกเพื่อให้แสดงตรงกลางพอดี
+                        ax_dict["คณิตศาสตร์"] = fig.add_subplot(gs[0, 0:2], polar=True)
                     if "วิทยาศาสตร์" in subjects_taken:
                         ax_dict["วิทยาศาสตร์"] = fig.add_subplot(gs[1, 0], polar=True)
                     if "ภาษาอังกฤษ" in subjects_taken:
                         ax_dict["ภาษาอังกฤษ"] = fig.add_subplot(gs[1, 1], polar=True)
 
-                    # 🌟 ช่องสำหรับสถิติ Max, Min, Ave 🌟
-                    ax_stats = fig.add_subplot(gs[0, 1])
-                    ax_stats.axis('off')
-                    ax_stats.set_ylim(0, 100)
-                    ax_stats.set_xlim(0, 100)
-
                     colors = {"คณิตศาสตร์": "blue", "วิทยาศาสตร์": "red", "ภาษาอังกฤษ": "green"}
                     
+                    # พื้นที่แสดงผลข้อความและสถิติ (ฝั่งขวามือ)
                     ax_text = fig.add_subplot(gs[:, 2])
                     ax_text.axis('off')
                     ax_text.set_ylim(0, 100)
@@ -309,7 +305,7 @@ with tab_dashboard:
                         sum_full_score = sum(t_fulls)
                         calc_percent = (total_score / sum_full_score) * 100 if sum_full_score > 0 else 0.0
 
-                        # 🌟 ดึงข้อมูลสถิติ (Max, Min, Mean) 🌟
+                        # 🌟 ดึงข้อมูลสถิติประจำสาขา (Max, Min, Mean) 🌟
                         mask = (df_report.iloc[:, 1].astype(str).str.strip() == subj) & (df_report.iloc[:, 4].astype(str).str.strip() == student_branch_val)
                         peer_data = df_report[mask]
                         
@@ -353,22 +349,15 @@ with tab_dashboard:
                         ax.set_title(f"วิชา {subj}", color=line_color, y=1.15, fontproperties=prop_title)
 
                         fetched_comment = get_real_comment(subj, total_score, sum_full_score)
-                        comment_texts[subj] = f"คะแนนรวม: {total_score}/{sum_full_score} (คิดเป็น {calc_percent:.1f}%)\nความเห็น:\n{fetched_comment}"
+                        
+                        # 🌟 ฝังข้อมูลสถิติรวมเข้าไปในกล่องข้อความความเห็นประจำวิชา 🌟
+                        comment_texts[subj] = f"คะแนนรวม: {total_score}/{sum_full_score} (คิดเป็น {calc_percent:.1f}%)\nสถิติสาขา: {stats_texts[subj]}\nความเห็น:\n{fetched_comment}"
 
                     for subj, ax in ax_dict.items():
                         if subj not in subjects_taken: 
                             ax.axis('off')
                     
-                    # 🌟 วาดกล่องสถิติตรงกลาง 🌟
-                    y_stat = 85
-                    ax_stats.text(0, y_stat+10, "📊 สถิติสาขา", fontproperties=prop_title, color="black", ha='left', va='top')
-                    for subj in ["คณิตศาสตร์", "วิทยาศาสตร์", "ภาษาอังกฤษ"]:
-                        if subj in subjects_taken:
-                            ax_stats.text(0, y_stat, f"• {subj}", fontproperties=prop_title, color=colors.get(subj, "black"), ha='left', va='top')
-                            ax_stats.text(5, y_stat - 12, stats_texts[subj], fontproperties=prop_comment, color='#555555', ha='left', va='top')
-                            y_stat -= 28 
-                    
-                    # 🌟 วาดข้อความรายงานผลด้านขวามือ 🌟
+                    # 🌟 วาดข้อความรายงานผลและสถิติด้านขวามือ 🌟
                     y_current = 98 
                     for subj in ["คณิตศาสตร์", "วิทยาศาสตร์", "ภาษาอังกฤษ"]:
                         if subj in subjects_taken:
@@ -376,11 +365,10 @@ with tab_dashboard:
                             y_current -= 4 
                             
                             wrapped_text = comment_texts[subj]
-                            
                             ax_text.text(0, y_current, wrapped_text, color='#333333', fontproperties=prop_comment, ha='left', va='top', linespacing=1.6)
                             
                             num_lines = len(wrapped_text.split('\n')) + (len(wrapped_text) // 60)
-                            y_current -= (num_lines * 3) + 8
+                            y_current -= (num_lines * 3) + 9
 
                     st.pyplot(fig)
                 else: 
