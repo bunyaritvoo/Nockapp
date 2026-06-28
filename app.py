@@ -367,7 +367,6 @@ with tab_dashboard:
                         comment_texts[subj] = (total_score, sum_full_score, calc_percent, fetched_comment)
 
                     y_stat = 90
-                    ax_stats.text(0, y_stat, "📊 สถิติสาขา", fontproperties=prop_title, color="black", ha='left', va='top')
                     y_stat -= 15
                     for subj in ["คณิตศาสตร์", "วิทยาศาสตร์", "ภาษาอังกฤษ"]:
                         if subj in subjects_taken:
