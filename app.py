@@ -8,13 +8,6 @@ import gspread
 import os
 import textwrap
 
-# ✨ พยายามโหลด pythainlp สำหรับตัดคำภาษาไทย
-try:
-    from pythainlp.tokenize import word_tokenize
-    HAS_PYTHAINLP = True
-except ImportError:
-    HAS_PYTHAINLP = False
-
 # --- 1. CONFIGURATION ---
 st.set_page_config(page_title="ระบบบันทึกคะแนนติวเข้าม.1", layout="wide") 
 SPREADSHEET_URL = "https://docs.google.com/spreadsheets/d/1ny5m5Yq4V269FdZemV105cDPeVUcp9sGjOyVAbbnA0Q/edit"
@@ -53,22 +46,17 @@ if not gc:
     st.error("🚨 เชื่อมต่อ Google API ไม่ได้")
     st.stop()
 
-@st.cache_data(ttl=600)
-def load_core_data():
-    _sh = gc.open_by_url(SPREADSHEET_URL)
-    _master = pd.DataFrame(_sh.worksheet("StudentList").get_all_records())
-    _topics = pd.DataFrame(_sh.worksheet("TopicSettings").get_all_records())
-    try: 
-        _comments = pd.DataFrame(_sh.worksheet("Comments").get_all_records())
-    except: 
-        _comments = pd.DataFrame()
-    return _master, _topics, _comments
-
 try:
     sh = gc.open_by_url(SPREADSHEET_URL)
-    master_data, df_topics, df_comments = load_core_data()
-except Exception as e:
-    st.error(f"🚨 โหลดข้อมูลเริ่มต้นไม่ได้ สาเหตุ: {e}")
+    master_data = pd.DataFrame(sh.worksheet("StudentList").get_all_records())
+    df_topics = pd.DataFrame(sh.worksheet("TopicSettings").get_all_records())
+    
+    try: 
+        df_comments = pd.DataFrame(sh.worksheet("Comments").get_all_records())
+    except: 
+        df_comments = pd.DataFrame()
+except:
+    st.error("🚨 โหลดข้อมูลเริ่มต้นไม่ได้")
     st.stop()
 
 def get_real_comment(subject, total_score, full_score):
@@ -95,63 +83,28 @@ def get_real_comment(subject, total_score, full_score):
             continue
     return "คะแนนไม่อยู่ในเกณฑ์ที่ตั้งไว้"
 
-# ✨ ฟังก์ชันบังคับตัดคำกราฟฉบับปรับปรุง (ไม่กลืนคำว่าอัตนัย)
 def format_radar_label(label):
-    label_str = str(label).strip()
-    is_essay = "อัตนัย" in label_str # เช็คก่อนเลยว่าต้นฉบับมีคำว่าอัตนัยไหม
-    
-    if "ตัวประกอบของจำนวนนับ" in label_str: res = "ตัวประกอบของจำนวนนับ\nห.ร.ม. ค.ร.น."
-    elif "เศษส่วนและเศษซ้อน" in label_str or "เศษส่วนและเศษส่วนซ้อน" in label_str: res = "เศษส่วนและเศษส่วนซ้อน"
-    elif "เศษส่วนอัตนัย" in label_str: res = "เศษส่วนอัตนัย"
-    elif "ทศนิยมอัตนัย" in label_str: res = "ทศนิยมอัตนัย"
-    elif "ห่วงโซ่อาหาร" in label_str: res = "ห่วงโซ่อาหาร\nและสายใยอาหาร"
-    elif "การเปลี่ยนแปลงของสาร" in label_str: res = "การเปลี่ยนแปลง\nของสาร"
-    elif "การจำแนกสิ่งมีชีวิต" in label_str: res = "การจำแนก\nสิ่งมีชีวิต"
-    elif "ทักษะกระบวนการทางวิทยาศาตร์" in label_str or "ทักษะกระบวนการทางวิทยาศาสตร์" in label_str: res = "ทักษะกระบวนการ\nทางวิทยาศาสตร์"
-    elif "การกำหนดตัวแปร" in label_str: res = "การกำหนด\nตัวแปร"
-    elif "การสังเคราะห์ด้วยแสง" in label_str: res = "การสังเคราะห์\nด้วยแสง"
-    elif "Demonstrative" in label_str: res = "Demonstrative Pronouns\nThere is/There are\nTense1"
-    elif "Countable" in label_str and "Uncountable" in label_str: res = "Countable and\nUncountable Nouns"
-    elif "Singular" in label_str and "Plural" in label_str: res = "Singular &\nPlural Nouns"
-    elif "Auxiliary" in label_str: res = "Auxiliary Verb\nand Modal Verb"
-    elif "Adjectives" in label_str and "Adverbs" in label_str: res = "Adjectives &\nAdverbs"
-    elif "Has / Have" in label_str: res = "Has / Have /\nHas got / Have got"
-    else: res = "\n".join(textwrap.wrap(label_str, width=22, break_long_words=False))
-    
-    # ถ้าต้นฉบับมี "อัตนัย" แต่ผลลัพธ์ที่โดนตัดแต่งแล้วไม่มี ให้เติมกลับเข้าไป
-    if is_essay and "อัตนัย" not in res:
-        res += " (อัตนัย)"
-        
-    return res
-
-# ✨ ฟังก์ชันตัดคำภาษาไทยแบบอัจฉริยะ 
-def wrap_thai_text(text, width=65):
-    if not text: return ""
-    lines = []
-    for line in str(text).split('\n'):
-        if not line.strip():
-            continue
-        if HAS_PYTHAINLP:
-            words = word_tokenize(line)
-            current_line = ""
-            for w in words:
-                if len(current_line) + len(w) > width:
-                    lines.append(current_line)
-                    current_line = w
-                else:
-                    current_line += w
-            if current_line:
-                lines.append(current_line)
-        else:
-            # Fallback หากไม่ได้ติดตั้ง pythainlp จะบังคับตัดเพื่อไม่ให้ล้นขอบจอ
-            wrapped = textwrap.fill(line, width=width, break_long_words=True)
-            lines.append(wrapped)
-    return '\n'.join(lines)
+    label = label.strip()
+    if "Demonstrative" in label:
+        return label.replace("/", "\n")
+    elif "Countable" in label and "Uncountable" in label:
+        return "Countable and\nUncountable Nouns"
+    elif "Singular" in label and "Plural" in label:
+        return "Singular &\nPlural Nouns"
+    elif "Auxiliary" in label:
+        return "Auxiliary Verb\nand Modal Verb"
+    elif "ตัวประกอบของจำนวนนับ" in label:
+        return "ตัวประกอบของจำนวนนับ\nห.ร.ม. ค.ร.น."
+    return "\n".join(textwrap.wrap(label, width=22, break_long_words=False))
 
 # --- 4. UI INTERFACE ---
 st.title("🎓 ระบบจัดการคะแนนและรายงานผล")
-tab_entry, tab_dashboard, tab_stat = st.tabs(["📝 บันทึกข้อมูล", "📊 พิมพ์รายงานผล (Report Card)", "📈 สถิติภาพรวม"])
+# 🌟 เพิ่มแท็บที่ 4: วิเคราะห์พัฒนาการ 🌟
+tab_entry, tab_dashboard, tab_stat, tab_trend = st.tabs(["📝 บันทึกข้อมูล", "📊 พิมพ์รายงานผล (Report Card)", "📈 สถิติภาพรวม", "📈 วิเคราะห์พัฒนาการ"])
 
+# ==========================================
+# 🌟 TAB 1: บันทึกข้อมูล
+# ==========================================
 with tab_entry:
     col_form, col_table = st.columns([1, 1.3])
     with col_form:
@@ -165,12 +118,12 @@ with tab_entry:
             st.error(f"❌ ไม่พบหน้า Sheet ชื่อ '{target_month}'")
             st.stop()
 
-        branches = sorted(master_data['Branch'].astype(str).unique().tolist())
+        branches = sorted(master_data['Branch'].unique().tolist())
         selected_branch = st.selectbox("สาขา", ["-- โปรดเลือกสาขา --"] + branches)
         names = master_data[master_data['Branch'] == selected_branch]['Name'].tolist() if selected_branch != "-- โปรดเลือกสาขา --" else []
         student_name = st.selectbox("นักเรียน", ["-- โปรดเลือกรายชื่อ --"] + names)
 
-        available_subjects = df_month[df_month.iloc[:, 0].astype(str).str.strip() == student_name.strip()].iloc[:, 1].unique().tolist()
+        available_subjects = df_month[df_month.iloc[:, 0].str.strip() == student_name.strip()].iloc[:, 1].unique().tolist()
         selected_subject = st.selectbox("วิชา", ["-- เลือกวิชา --"] + available_subjects)
 
         topic_labels, topic_fulls = [], []
@@ -201,7 +154,7 @@ with tab_entry:
                 cols = st.columns(len(topic_labels))
                 for idx, col in enumerate(cols):
                     with col:
-                        val = st.number_input(f"{topic_labels[idx]} (เต็ม {topic_fulls[idx]})", min_value=0.0, max_value=float(topic_fulls[idx]), value=0.0, step=1.0, key=f"score_{idx}")
+                        val = st.number_input(f"{topic_labels[idx]} (เต็ม {topic_fulls[idx]})", min_value=0, max_value=topic_fulls[idx], value=0, key=f"score_{idx}")
                         input_scores.append(val)
                 
                 if st.form_submit_button("🚀 บันทึกข้อมูล"):
@@ -209,10 +162,9 @@ with tab_entry:
                         found = False
                         for i, r in enumerate(ws_current.get_all_values()):
                             if r[0].strip() == student_name.strip() and r[1].strip() == selected_subject.strip():
-                                padded_scores = input_scores + [""] * (7 - len(input_scores))
-                                end_col_char = chr(ord('C') + 2 + 7) 
+                                end_col_char = chr(ord('C') + 2 + len(input_scores))
                                 update_range = f"C{i+1}:{end_col_char}{i+1}"
-                                update_values = [[target_month, year, selected_branch] + padded_scores]
+                                update_values = [[target_month, year, selected_branch] + input_scores]
                                 
                                 ws_current.update(update_range, update_values)
                                 st.success("✅ บันทึกสำเร็จ!")
@@ -233,6 +185,9 @@ with tab_entry:
                 display_df = display_df[display_df.iloc[:, 4] == selected_branch]
             st.dataframe(display_df, use_container_width=True, height=600)
 
+# ==========================================
+# 🌟 TAB 2: กราฟ + ดึงคอมเมนต์อัตโนมัติตามช่วงคะแนน
+# ==========================================
 with tab_dashboard:
     col_rep1, col_rep2 = st.columns(2)
     with col_rep1:
@@ -265,29 +220,29 @@ with tab_dashboard:
 
                 if subjects_taken:
                     fig = plt.figure(figsize=(18, 12))
-                    fig.suptitle(f'รายงานผลการเรียนรู้: {report_student} (เดือน {report_month} ปี {report_year})', fontproperties=prop_header, fontsize=28, y=0.97)
+                    
+                    fig.subplots_adjust(top=0.82, hspace=0.4, wspace=0.3)
+                    gs = fig.add_gridspec(2, 3, width_ratios=[1, 1, 1.2])
+                    fig.suptitle(f'รายงานผลการเรียนรู้: {report_student} (เดือน {report_month} ปี {report_year})', fontproperties=prop_header, fontsize=28, y=0.96)
 
-                    ax_dict = {}
-                    if "คณิตศาสตร์" in subjects_taken:
-                        ax_dict["คณิตศาสตร์"] = fig.add_axes([0.18, 0.48, 0.22, 0.36], polar=True)
-                    if "วิทยาศาสตร์" in subjects_taken:
-                        ax_dict["วิทยาศาสตร์"] = fig.add_axes([0.02, 0.08, 0.22, 0.36], polar=True)
-                    if "ภาษาอังกฤษ" in subjects_taken:
-                        ax_dict["ภาษาอังกฤษ"] = fig.add_axes([0.34, 0.08, 0.22, 0.36], polar=True)
-
+                    ax_dict = {
+                        "คณิตศาสตร์": fig.add_subplot(gs[0, 0], polar=True),
+                        "วิทยาศาสตร์": fig.add_subplot(gs[1, 0], polar=True),
+                        "ภาษาอังกฤษ": fig.add_subplot(gs[1, 1], polar=True)
+                    }
                     colors = {"คณิตศาสตร์": "blue", "วิทยาศาสตร์": "red", "ภาษาอังกฤษ": "green"}
                     
-                    ax_stats = fig.add_axes([0.02, 0.65, 0.18, 0.25])
+                    ax_stats = fig.add_subplot(gs[0, 1])
                     ax_stats.axis('off')
                     ax_stats.set_ylim(0, 100)
                     ax_stats.set_xlim(0, 100)
-
-                    ax_text = fig.add_axes([0.62, 0.05, 0.36, 0.88])
+                    
+                    ax_text = fig.add_subplot(gs[:, 2])
                     ax_text.axis('off')
                     ax_text.set_ylim(0, 100)
                     ax_text.set_xlim(0, 100)
                     
-                    comment_texts = {}
+                    comment_texts = {"คณิตศาสตร์": "ยังไม่มีข้อมูล", "วิทยาศาสตร์": "ยังไม่มีข้อมูล", "ภาษาอังกฤษ": "ยังไม่มีข้อมูล"}
                     stats_texts = {}
 
                     for subj in subjects_taken:
@@ -345,7 +300,7 @@ with tab_dashboard:
                             stat_min = min(peer_totals)
                             stat_max = max(peer_totals)
                             stat_mean = sum(peer_totals) / len(peer_totals)
-                            stats_texts[subj] = f"Max: {stat_max:g} | Min: {stat_min:g} | Ave: {stat_mean:.1f}"
+                            stats_texts[subj] = f"Max: {stat_max:g}   |   Min: {stat_min:g}   |   Mean: {stat_mean:.1f}"
                         else:
                             stats_texts[subj] = "ไม่มีข้อมูลสถิติ"
 
@@ -367,39 +322,34 @@ with tab_dashboard:
                         ax.plot(angles, scores_norm, color=line_color, linewidth=2)
                         ax.fill(angles, scores_norm, color=line_color, alpha=0.25)
                         
-                        ax.set_title(f"วิชา {subj}", color=line_color, y=1.12, fontproperties=prop_title)
+                        ax.set_title(f"วิชา {subj}", color=line_color, y=1.1, fontproperties=prop_title)
 
                         fetched_comment = get_real_comment(subj, total_score, sum_full_score)
-                        comment_texts[subj] = (total_score, sum_full_score, calc_percent, fetched_comment)
+                        comment_texts[subj] = f"คะแนนรวม: {total_score}/{sum_full_score} (คิดเป็น {calc_percent:.1f}%)\nความเห็น:\n{fetched_comment}"
 
-                    y_stat = 90
-                    ax_stats.text(0, y_stat, "📊 สถิติสาขา", fontproperties=prop_title, color="black", ha='left', va='top')
-                    y_stat -= 15
+                    for subj, ax in ax_dict.items():
+                        if subj not in subjects_taken: 
+                            ax.axis('off')
+
+                    ax_stats.text(0, 95, "📊 สถิติเปรียบเทียบในสาขา", fontproperties=prop_title, color='#333333', ha='left', va='top', fontsize=15)
+                    
+                    y_stat = 75
                     for subj in ["คณิตศาสตร์", "วิทยาศาสตร์", "ภาษาอังกฤษ"]:
                         if subj in subjects_taken:
                             ax_stats.text(0, y_stat, f"• {subj}", fontproperties=prop_title, color=colors.get(subj, "black"), ha='left', va='top')
                             ax_stats.text(5, y_stat - 12, stats_texts[subj], fontproperties=prop_comment, color='#555555', ha='left', va='top')
-                            y_stat -= 25
+                            y_stat -= 28 
 
                     y_current = 98 
                     for subj in ["คณิตศาสตร์", "วิทยาศาสตร์", "ภาษาอังกฤษ"]:
-                        if subj in subjects_taken:
-                            ax_text.text(0, y_current, f"รายงานผล: {subj}", color=colors.get(subj, "black"), fontproperties=prop_title, ha='left', va='top')
-                            y_current -= 4 
-                            
-                            t_score, f_score, p_calc, f_comment = comment_texts[subj]
-                            score_line = f"คะแนนรวม: {t_score}/{f_score} (คิดเป็น {p_calc:.1f}%)"
-                            ax_text.text(0, y_current, score_line, color='#333333', fontproperties=prop_comment, ha='left', va='top')
-                            y_current -= 4
-                            
-                            ax_text.text(0, y_current, "ความเห็น:", color='#333333', fontproperties=prop_comment, ha='left', va='top')
-                            y_current -= 4
-                            
-                            wrapped_comment = wrap_thai_text(f_comment, width=65)
-                            ax_text.text(0, y_current, wrapped_comment, color='#555555', fontproperties=prop_comment, ha='left', va='top', linespacing=1.6)
-                            
-                            num_lines = len(wrapped_comment.split('\n'))
-                            y_current -= (num_lines * 3.2) + 6
+                        ax_text.text(0, y_current, f"รายงานผล: {subj}", color=colors.get(subj, "black"), fontproperties=prop_title, ha='left', va='top')
+                        y_current -= 4 
+                        
+                        wrapped_text = "\n".join(textwrap.wrap(comment_texts[subj], width=55, break_long_words=False))
+                        ax_text.text(0, y_current, wrapped_text, color='#333333', fontproperties=prop_comment, ha='left', va='top', linespacing=1.5)
+                        
+                        num_lines = len(wrapped_text.split('\n'))
+                        y_current -= (num_lines * 2.8) + 12
 
                     st.pyplot(fig)
                 else: 
@@ -407,6 +357,9 @@ with tab_dashboard:
         else:
             st.warning(f"ไม่มีข้อมูลการสอบของนักเรียนในปีการศึกษา {report_year} สำหรับเดือน {report_month}")
 
+# ==========================================
+# 🌟 TAB 3: สถิติภาพรวม
+# ==========================================
 with tab_stat:
     col_stat1, col_stat2 = st.columns(2)
     with col_stat1:
@@ -477,3 +430,115 @@ with tab_stat:
             st.warning(f"ไม่มีข้อมูลการสอบของนักเรียนในปีการศึกษา {stat_year} สำหรับเดือน {stat_month}")
     else:
         st.error(f"❌ ไม่พบหน้าตารางข้อมูล (Sheet) ของเดือน '{stat_month}'")
+
+# ==========================================
+# 🌟 TAB 4: วิเคราะห์พัฒนาการระยะยาว (Trend Analysis)
+# ==========================================
+with tab_trend:
+    st.subheader("📈 วิเคราะห์พัฒนาการระยะยาว (Trend Analysis)")
+
+    col_t1, col_t2, col_t3 = st.columns(3)
+    with col_t1:
+        trend_year = st.selectbox("เลือกปีการศึกษา", ["2568", "2569", "2570", "2571"], index=1, key="trend_year")
+    with col_t2:
+        all_branches_trend = sorted(master_data['Branch'].unique().tolist())
+        trend_branch = st.selectbox("สาขา", ["-- โปรดเลือกสาขา --"] + all_branches_trend, key="trend_branch")
+    with col_t3:
+        trend_names = master_data[master_data['Branch'] == trend_branch]['Name'].tolist() if trend_branch != "-- โปรดเลือกสาขา --" else []
+        trend_student = st.selectbox("นักเรียน", ["-- โปรดเลือกรายชื่อ --"] + trend_names, key="trend_student")
+
+    trend_subjects = ["คณิตศาสตร์", "วิทยาศาสตร์", "ภาษาอังกฤษ"]
+    trend_subject = st.selectbox("เลือกวิชาที่ต้องการวิเคราะห์", ["-- เลือกวิชา --"] + trend_subjects, key="trend_subj")
+
+    all_months = ["มกราคม", "กุมภาพันธ์", "มีนาคม", "เมษายน", "พฤษภาคม", "มิถุนายน", "กรกฎาคม", "สิงหาคม", "กันยายน", "ตุลาคม", "พฤศจิกายน", "ธันวาคม"]
+    selected_months = st.multiselect("เลือกเดือนที่ต้องการเปรียบเทียบ (เรียงลำดับเวลา)", all_months, default=["มกราคม", "กุมภาพันธ์", "มีนาคม", "เมษายน"], key="trend_months")
+
+    if st.button("🔍 เริ่มวิเคราะห์พัฒนาการ", use_container_width=True):
+        if trend_student != "-- โปรดเลือกรายชื่อ --" and trend_subject != "-- เลือกวิชา --" and len(selected_months) > 1:
+            with st.spinner("กำลังรวบรวมข้อมูลข้ามเดือน... อาจใช้เวลาสักครู่"):
+                trend_data = []
+
+                for m in selected_months:
+                    try:
+                        ws_m = sh.worksheet(m)
+                        df_m = pd.DataFrame(ws_m.get_all_values())
+                        df_m.columns = df_m.iloc[0]
+                        df_m = df_m[1:].reset_index(drop=True)
+
+                        student_row = df_m[(df_m.iloc[:, 0].str.strip() == trend_student) & 
+                                           (df_m.iloc[:, 1].str.strip() == trend_subject) & 
+                                           (df_m.iloc[:, 3].astype(str).str.strip() == trend_year.strip())]
+
+                        if not student_row.empty:
+                            row_data = student_row.iloc[0]
+
+                            match_topic = df_topics[(df_topics['Month'].astype(str).str.strip() == m) & 
+                                                    (df_topics['Subject'].astype(str).str.strip() == trend_subject)]
+
+                            t_fulls = []
+                            if not match_topic.empty:
+                                t_row = match_topic.iloc[0]
+                                for i in range(1, 8):
+                                    t_name = str(t_row.get(f'Topic_{i}', '')).strip()
+                                    if t_name and t_name.lower() != 'nan' and t_name != '':
+                                        try: t_fulls.append(int(t_row.get(f'FullScore_{i}', 10)))
+                                        except: t_fulls.append(10)
+
+                            if not t_fulls: t_fulls = [10, 10, 10]
+
+                            scores_raw = []
+                            for idx in range(len(t_fulls)):
+                                try:
+                                    val_str = str(row_data.iloc[5 + idx]).strip()
+                                    scores_raw.append(float(val_str) if val_str else 0.0)
+                                except:
+                                    scores_raw.append(0.0)
+
+                            total_score = sum(scores_raw)
+                            sum_full_score = sum(t_fulls)
+
+                            if sum_full_score > 0:
+                                percent = (total_score / sum_full_score) * 100
+                                trend_data.append({"เดือน": m, "เปอร์เซ็นต์ (%)": percent, "คะแนนดิบที่ได้": f"{total_score}/{sum_full_score}"})
+                            else:
+                                trend_data.append({"เดือน": m, "เปอร์เซ็นต์ (%)": 0, "คะแนนดิบที่ได้": "0/0"})
+                        else:
+                            trend_data.append({"เดือน": m, "เปอร์เซ็นต์ (%)": None, "คะแนนดิบที่ได้": "ไม่มีข้อมูลสอบ"})
+
+                    except Exception as e:
+                        trend_data.append({"เดือน": m, "เปอร์เซ็นต์ (%)": None, "คะแนนดิบที่ได้": "ไม่พบชีตฐานข้อมูล"})
+
+                df_trend = pd.DataFrame(trend_data)
+                valid_trend = df_trend.dropna(subset=['เปอร์เซ็นต์ (%)'])
+
+                if not valid_trend.empty:
+                    st.success(f"พบข้อมูลการสอบ {len(valid_trend)} เดือน จากที่เลือกไว้ทั้งหมด {len(selected_months)} เดือน")
+                    st.divider()
+                    
+                    st.markdown(f"### 📈 แนวโน้มผลการเรียนวิชา {trend_subject}")
+                    st.markdown(f"**นักเรียน:** {trend_student} | **ปีการศึกษา:** {trend_year}")
+
+                    fig_trend, ax_trend = plt.subplots(figsize=(10, 5))
+                    ax_trend.plot(valid_trend['เดือน'], valid_trend['เปอร์เซ็นต์ (%)'], marker='o', linestyle='-', color='#0066cc', markersize=10, linewidth=2.5)
+
+                    ax_trend.set_ylim(0, 110)
+                    ax_trend.set_ylabel('ผลการเรียน (คิดเป็นเปอร์เซ็นต์ %)', fontproperties=prop_title, fontsize=14, labelpad=15)
+                    ax_trend.set_title(f'กราฟวิเคราะห์พัฒนาการระยะยาว', fontproperties=prop_header, pad=20)
+
+                    ax_trend.set_xticklabels(valid_trend['เดือน'], fontproperties=prop_normal, fontsize=12)
+                    for label in ax_trend.get_yticklabels():
+                        label.set_fontproperties(prop_normal)
+
+                    for i, txt in enumerate(valid_trend['เปอร์เซ็นต์ (%)']):
+                        ax_trend.annotate(f"{txt:.1f}%", (valid_trend['เดือน'].iloc[i], valid_trend['เปอร์เซ็นต์ (%)'].iloc[i]),
+                                        textcoords="offset points", xytext=(0,12), ha='center', fontproperties=prop_title, color='darkblue')
+
+                    ax_trend.grid(True, linestyle='--', alpha=0.5)
+                    st.pyplot(fig_trend)
+
+                    st.markdown("#### 📋 ตารางสรุปคะแนน")
+                    st.dataframe(df_trend, use_container_width=True)
+                else:
+                    st.warning("ไม่พบประวัติคะแนนของนักเรียนคนนี้ในเดือนที่คุณเลือกเลยครับ")
+        else:
+            st.info("⚠️ โปรดเลือกนักเรียน วิชา และเดือนที่ต้องการเปรียบเทียบ (อย่างน้อย 2 เดือน) ให้ครบถ้วน แล้วกดปุ่มค้นหาครับ")
