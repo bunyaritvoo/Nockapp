@@ -29,7 +29,7 @@ def load_thai_font():
 prop_normal, prop_title, prop_header = load_thai_font()
 prop_comment = fm.FontProperties(fname="Sarabun-Regular.ttf", size=14)
 
-# --- 3. การเชื่อมต่อฐานข้อมูล ---
+# --- 3. การเชื่อมต่อฐานข้อมูล (ระบบ Cache ป้องกัน API โดนแบน) ---
 @st.cache_resource
 def get_gspread_client():
     try:
@@ -46,18 +46,46 @@ if not gc:
     st.error("🚨 เชื่อมต่อ Google API ไม่ได้")
     st.stop()
 
+# 🌟 Cache ตัวแผ่นงานหลัก (Spreadsheet) 🌟
+@st.cache_resource
+def get_spreadsheet():
+    return gc.open_by_url(SPREADSHEET_URL)
+
 try:
-    sh = gc.open_by_url(SPREADSHEET_URL)
-    master_data = pd.DataFrame(sh.worksheet("StudentList").get_all_records())
-    df_topics = pd.DataFrame(sh.worksheet("TopicSettings").get_all_records())
-    
-    try: 
-        df_comments = pd.DataFrame(sh.worksheet("Comments").get_all_records())
-    except: 
-        df_comments = pd.DataFrame()
-except:
-    st.error("🚨 โหลดข้อมูลเริ่มต้นไม่ได้")
+    sh = get_spreadsheet()
+except Exception as e:
+    st.error(f"🚨 เชื่อมต่อไฟล์ Google Sheets ไม่ได้: {e}")
     st.stop()
+
+# 🌟 Cache ข้อมูลพื้นฐานที่ต้องดึงตอนเปิดเว็บ 🌟
+@st.cache_data(ttl=600)
+def load_core_data():
+    m_data = pd.DataFrame(sh.worksheet("StudentList").get_all_records())
+    t_data = pd.DataFrame(sh.worksheet("TopicSettings").get_all_records())
+    try: 
+        c_data = pd.DataFrame(sh.worksheet("Comments").get_all_records())
+    except: 
+        c_data = pd.DataFrame()
+    return m_data, t_data, c_data
+
+try:
+    master_data, df_topics, df_comments = load_core_data()
+except Exception as e:
+    st.error(f"🚨 โหลดข้อมูลเริ่มต้นไม่ได้ (อาจโดนจำกัดโควต้าการดึงข้อมูล กรุณารอ 1 นาทีแล้วรีเฟรชหน้าเว็บ): {e}")
+    st.stop()
+
+# 🌟 Cache ข้อมูลรายเดือน ป้องกันการดึงซ้ำเวลาคลิกแท็บ 4 🌟
+@st.cache_data(ttl=600)
+def load_month_df(month_name):
+    try:
+        ws = sh.worksheet(month_name)
+        df = pd.DataFrame(ws.get_all_values())
+        if not df.empty:
+            df.columns = df.iloc[0]
+            df = df[1:].reset_index(drop=True)
+        return df
+    except:
+        return pd.DataFrame()
 
 def get_real_comment(subject, total_score, full_score):
     if df_comments.empty: 
@@ -99,7 +127,6 @@ def format_radar_label(label):
 
 # --- 4. UI INTERFACE ---
 st.title("🎓 ระบบจัดการคะแนนและรายงานผล")
-# 🌟 เพิ่มแท็บที่ 4: วิเคราะห์พัฒนาการ 🌟
 tab_entry, tab_dashboard, tab_stat, tab_trend = st.tabs(["📝 บันทึกข้อมูล", "📊 พิมพ์รายงานผล (Report Card)", "📈 สถิติภาพรวม", "📈 วิเคราะห์พัฒนาการ"])
 
 # ==========================================
@@ -110,10 +137,9 @@ with tab_entry:
     with col_form:
         target_month = st.selectbox("เลือกเดือน (สำหรับบันทึก)", ["มกราคม", "กุมภาพันธ์", "มีนาคม", "เมษายน", "พฤษภาคม", "มิถุนายน", "กรกฎาคม", "สิงหาคม", "กันยายน", "ตุลาคม", "พฤศจิกายน", "ธันวาคม"], key="entry_month")
         try:
-            ws_current = sh.worksheet(target_month)
-            df_month = pd.DataFrame(ws_current.get_all_values())
-            df_month.columns = df_month.iloc[0]
-            df_month = df_month[1:].reset_index(drop=True)
+            ws_current = sh.worksheet(target_month) # ต้องดึง object นี้ไว้ใช้คำสั่ง update
+            df_month = load_month_df(target_month)
+            if df_month.empty: raise Exception
         except: 
             st.error(f"❌ ไม่พบหน้า Sheet ชื่อ '{target_month}'")
             st.stop()
@@ -167,6 +193,10 @@ with tab_entry:
                                 update_values = [[target_month, year, selected_branch] + input_scores]
                                 
                                 ws_current.update(update_range, update_values)
+                                
+                                # 🌟 เคลียร์ความจำ (Cache) หลังจากกรอกคะแนน เพื่อให้หน้าเว็บอัปเดตข้อมูลใหม่ทันที 🌟
+                                st.cache_data.clear() 
+                                
                                 st.success("✅ บันทึกสำเร็จ!")
                                 st.balloons()
                                 st.rerun()
@@ -197,16 +227,10 @@ with tab_dashboard:
 
     st.subheader(f"📄 พิมพ์รายงานผลการเรียนรู้: เดือน {report_month} ปี {report_year}")
     
-    try:
-        ws_report = sh.worksheet(report_month)
-        df_report_raw = pd.DataFrame(ws_report.get_all_values())
-        df_report_raw.columns = df_report_raw.iloc[0]
-        df_report = df_report_raw[1:].reset_index(drop=True)
-    except:
-        df_report = pd.DataFrame()
+    df_report = load_month_df(report_month)
+    if df_report.empty:
         st.error(f"❌ ไม่พบหน้าตารางข้อมูล (Sheet) ของเดือน '{report_month}'")
-
-    if not df_report.empty:
+    else:
         year_col = df_report.columns[3]
         df_report = df_report[df_report[year_col].astype(str).str.strip() == report_year.strip()]
 
@@ -369,13 +393,7 @@ with tab_stat:
 
     st.subheader(f"📈 สถิติคะแนนภาพรวม: เดือน {stat_month} ปี {stat_year}")
     
-    try:
-        ws_stat = sh.worksheet(stat_month)
-        df_stat_raw = pd.DataFrame(ws_stat.get_all_values())
-        df_stat_raw.columns = df_stat_raw.iloc[0]
-        df_stat = df_stat_raw[1:].reset_index(drop=True)
-    except:
-        df_stat = pd.DataFrame()
+    df_stat = load_month_df(stat_month)
         
     if not df_stat.empty:
         year_col = df_stat.columns[3]
@@ -460,53 +478,52 @@ with tab_trend:
 
                 for m in selected_months:
                     try:
-                        ws_m = sh.worksheet(m)
-                        df_m = pd.DataFrame(ws_m.get_all_values())
-                        df_m.columns = df_m.iloc[0]
-                        df_m = df_m[1:].reset_index(drop=True)
+                        df_m = load_month_df(m)
+                        if not df_m.empty:
+                            student_row = df_m[(df_m.iloc[:, 0].str.strip() == trend_student) & 
+                                               (df_m.iloc[:, 1].str.strip() == trend_subject) & 
+                                               (df_m.iloc[:, 3].astype(str).str.strip() == trend_year.strip())]
 
-                        student_row = df_m[(df_m.iloc[:, 0].str.strip() == trend_student) & 
-                                           (df_m.iloc[:, 1].str.strip() == trend_subject) & 
-                                           (df_m.iloc[:, 3].astype(str).str.strip() == trend_year.strip())]
+                            if not student_row.empty:
+                                row_data = student_row.iloc[0]
 
-                        if not student_row.empty:
-                            row_data = student_row.iloc[0]
+                                match_topic = df_topics[(df_topics['Month'].astype(str).str.strip() == m) & 
+                                                        (df_topics['Subject'].astype(str).str.strip() == trend_subject)]
 
-                            match_topic = df_topics[(df_topics['Month'].astype(str).str.strip() == m) & 
-                                                    (df_topics['Subject'].astype(str).str.strip() == trend_subject)]
+                                t_fulls = []
+                                if not match_topic.empty:
+                                    t_row = match_topic.iloc[0]
+                                    for i in range(1, 8):
+                                        t_name = str(t_row.get(f'Topic_{i}', '')).strip()
+                                        if t_name and t_name.lower() != 'nan' and t_name != '':
+                                            try: t_fulls.append(int(t_row.get(f'FullScore_{i}', 10)))
+                                            except: t_fulls.append(10)
 
-                            t_fulls = []
-                            if not match_topic.empty:
-                                t_row = match_topic.iloc[0]
-                                for i in range(1, 8):
-                                    t_name = str(t_row.get(f'Topic_{i}', '')).strip()
-                                    if t_name and t_name.lower() != 'nan' and t_name != '':
-                                        try: t_fulls.append(int(t_row.get(f'FullScore_{i}', 10)))
-                                        except: t_fulls.append(10)
+                                if not t_fulls: t_fulls = [10, 10, 10]
 
-                            if not t_fulls: t_fulls = [10, 10, 10]
+                                scores_raw = []
+                                for idx in range(len(t_fulls)):
+                                    try:
+                                        val_str = str(row_data.iloc[5 + idx]).strip()
+                                        scores_raw.append(float(val_str) if val_str else 0.0)
+                                    except:
+                                        scores_raw.append(0.0)
 
-                            scores_raw = []
-                            for idx in range(len(t_fulls)):
-                                try:
-                                    val_str = str(row_data.iloc[5 + idx]).strip()
-                                    scores_raw.append(float(val_str) if val_str else 0.0)
-                                except:
-                                    scores_raw.append(0.0)
+                                total_score = sum(scores_raw)
+                                sum_full_score = sum(t_fulls)
 
-                            total_score = sum(scores_raw)
-                            sum_full_score = sum(t_fulls)
-
-                            if sum_full_score > 0:
-                                percent = (total_score / sum_full_score) * 100
-                                trend_data.append({"เดือน": m, "เปอร์เซ็นต์ (%)": percent, "คะแนนดิบที่ได้": f"{total_score}/{sum_full_score}"})
+                                if sum_full_score > 0:
+                                    percent = (total_score / sum_full_score) * 100
+                                    trend_data.append({"เดือน": m, "เปอร์เซ็นต์ (%)": percent, "คะแนนดิบที่ได้": f"{total_score}/{sum_full_score}"})
+                                else:
+                                    trend_data.append({"เดือน": m, "เปอร์เซ็นต์ (%)": 0, "คะแนนดิบที่ได้": "0/0"})
                             else:
-                                trend_data.append({"เดือน": m, "เปอร์เซ็นต์ (%)": 0, "คะแนนดิบที่ได้": "0/0"})
+                                trend_data.append({"เดือน": m, "เปอร์เซ็นต์ (%)": None, "คะแนนดิบที่ได้": "ไม่มีข้อมูลสอบ"})
                         else:
-                            trend_data.append({"เดือน": m, "เปอร์เซ็นต์ (%)": None, "คะแนนดิบที่ได้": "ไม่มีข้อมูลสอบ"})
+                            trend_data.append({"เดือน": m, "เปอร์เซ็นต์ (%)": None, "คะแนนดิบที่ได้": "ไม่พบข้อมูลเดือนนี้"})
 
                     except Exception as e:
-                        trend_data.append({"เดือน": m, "เปอร์เซ็นต์ (%)": None, "คะแนนดิบที่ได้": "ไม่พบชีตฐานข้อมูล"})
+                        trend_data.append({"เดือน": m, "เปอร์เซ็นต์ (%)": None, "คะแนนดิบที่ได้": "ข้อผิดพลาดการดึงข้อมูล"})
 
                 df_trend = pd.DataFrame(trend_data)
                 valid_trend = df_trend.dropna(subset=['เปอร์เซ็นต์ (%)'])
