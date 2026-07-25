@@ -177,7 +177,7 @@ with tab_entry:
                 cols = st.columns(len(topic_labels))
                 for idx, col in enumerate(cols):
                     with col:
-                        val = st.number_input(f"{topic_labels[idx]} (เต็ม {topic_fulls[idx]})", min_value=0, max_value=topic_fulls[idx], value=0, key=f"score_{idx}")
+                        val = st.number_input(f"{topic_labels[idx]} (เต็ม {topic_fulls[idx]})", min_value=0.0, max_value=float(topic_fulls[idx]), value=0.0, step=0.5, key=f"score_{idx}")
                         input_scores.append(val)
                 
                 if st.form_submit_button("🚀 บันทึกข้อมูล"):
