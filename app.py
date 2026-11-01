@@ -10,6 +10,7 @@ import os
 import io
 import textwrap
 import re
+from matplotlib.textpath import TextPath
 
 try:
     from pythainlp.tokenize import word_tokenize as _thai_tokenize
@@ -186,16 +187,16 @@ def _split_long_unit(unit, fits):
         pieces.append(cur)
     return pieces
 
-def wrap_to_width(text, font_path, font_size, max_px, renderer, dpi):
-    """ตัดบรรทัดให้เต็มความกว้าง max_px ก่อนขึ้นบรรทัดใหม่ รักษาการขึ้นบรรทัดใหม่ที่ผู้ใช้พิมพ์ไว้"""
-    prop = fm.FontProperties(fname=font_path, size=font_size)
-
-    def width(t):
-        w, _, _ = renderer.get_text_width_height_descent(t, prop, ismath=False)
-        return w
+def wrap_to_width(text, font_path, font_size, max_pt):
+    """ตัดบรรทัดให้เต็มความกว้าง max_pt (หน่วยพอยต์) ก่อนขึ้นบรรทัดใหม่ รักษาการขึ้นบรรทัดใหม่ที่ผู้ใช้พิมพ์ไว้
+    วัดความกว้างด้วย TextPath จึงไม่ขึ้นกับ dpi ของภาพ"""
+    prop = fm.FontProperties(fname=font_path)
 
     def fits(t):
-        return width(t.rstrip()) <= max_px
+        t = t.rstrip()
+        if not t:
+            return True
+        return TextPath((0, 0), t, size=font_size, prop=prop).get_extents().width <= max_pt
 
     out_lines = []
     for para in str(text).splitlines():
@@ -348,8 +349,6 @@ with tab_dashboard:
                     fig.suptitle(f'รายงานผลการเรียนรู้: {report_student} (เดือน {report_month} ปี {report_year})',
                                  fontproperties=prop_header, fontsize=28, y=0.985)
 
-                    renderer = fig.canvas.get_renderer()
-
                     for r_idx, subj in enumerate(subject_order):
                         ax = fig.add_subplot(gs[r_idx, 0])
                         ax.set_xlim(-1, 101)
@@ -434,16 +433,17 @@ with tab_dashboard:
                         ax.text(cx, 80, "ความเห็น", fontproperties=prop_title, fontsize=c_head_size,
                                 color='#333333', ha='left', va='top')
                         fetched_comment = get_real_comment(subj, total_score, sum_full_score)
-                        # ความกว้างที่ใช้ได้จริง: จาก cx ไปถึงขอบกรอบ (เว้นขอบขวา 2 หน่วย)
-                        px_per_unit = ax.get_window_extent(renderer).width / 102.0
-                        max_px = (99 - cx) * px_per_unit
-                        wrapped = wrap_to_width(fetched_comment, "Sarabun-Regular.ttf", c_font_size,
-                                                max_px, renderer, fig.dpi)
-                        # วาดทีละบรรทัดด้วยระยะห่างที่กำหนดเอง (คุมระยะบรรทัดได้แน่นอน)
+                        # ขนาดแกนเป็นพอยต์ (คิดจากขนาดภาพเป็นนิ้ว ไม่ขึ้นกับ dpi)
+                        pos = ax.get_position()
+                        ax_w_pt = pos.width * fig.get_figwidth() * 72.0
+                        ax_h_pt = pos.height * fig.get_figheight() * 72.0
+                        max_pt = (99 - cx) * ax_w_pt / 102.0
+                        wrapped = wrap_to_width(fetched_comment, "Sarabun-Regular.ttf", c_font_size, max_pt)
+
+                        # วาดทีละบรรทัดด้วยระยะห่างที่กำหนดเอง
                         y_start = 68 if not has_breakdown else 70
                         line_factor = 1.9 if not has_breakdown else 1.75
-                        px_per_unit_y = ax.get_window_extent(renderer).height / 102.0
-                        step_units = (c_font_size * line_factor * fig.dpi / 72.0) / px_per_unit_y
+                        step_units = (c_font_size * line_factor) / (ax_h_pt / 102.0)
                         comment_lines = wrapped.split("\n")
                         # ถ้าคอมเมนต์ยาวจนล้นกรอบ ให้บีบระยะบรรทัดลงอัตโนมัติ (ไม่ต่ำกว่า 1.3 เท่า)
                         room = y_start - 3
