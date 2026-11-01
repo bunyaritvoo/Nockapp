@@ -9,6 +9,12 @@ import gspread
 import os
 import io
 import textwrap
+import re
+
+try:
+    from pythainlp.tokenize import word_tokenize as _thai_tokenize
+except Exception:
+    _thai_tokenize = None
 
 # --- 1. CONFIGURATION ---
 st.set_page_config(page_title="ระบบบันทึกคะแนนติวเข้าม.1", layout="wide") 
@@ -153,6 +159,68 @@ def draw_stat_box(ax, x, y, w, h, title, value_text, sub_text, color, highlight=
     ax.text(x + w / 2, y + 5, sub_text, fontproperties=prop_normal, fontsize=11,
             color='#666666', ha='center', va='bottom')
 
+# --- ตัดบรรทัดภาษาไทยตามความกว้างจริง (พิกเซล) ไม่ตัดกลางคำ ---
+_NO_BREAK_BEFORE = set("ะัาำิีึืุูเ็่้๊๋์ๆฯ" ) - set("เ")  # สระ/วรรณยุกต์ที่ห้ามขึ้นต้นบรรทัด
+_NO_BREAK_AFTER = set("เแโใไ")                           # สระหน้า ห้ามค้างท้ายบรรทัด
+
+def _thai_units(text):
+    """แบ่งข้อความเป็นหน่วยที่ตัดบรรทัดได้ (คำ) ถ้าไม่มี pythainlp จะตัดตามช่องว่าง"""
+    if _thai_tokenize is not None:
+        try:
+            return [u for u in _thai_tokenize(text, keep_whitespace=True) if u != ""]
+        except Exception:
+            pass
+    return [u for u in re.findall(r"\S+\s*|\s+", text)]
+
+def _split_long_unit(unit, fits):
+    """คำเดียวที่ยาวเกินบรรทัด: ตัดเป็นตัวอักษร แต่ไม่ตัดแยกสระ/วรรณยุกต์ หรือสระหน้าออกจากพยัญชนะ"""
+    pieces, cur = [], ""
+    for ch in unit:
+        cand = cur + ch
+        if cur and not fits(cand) and ch not in _NO_BREAK_BEFORE and cur[-1] not in _NO_BREAK_AFTER:
+            pieces.append(cur)
+            cur = ch
+        else:
+            cur = cand
+    if cur:
+        pieces.append(cur)
+    return pieces
+
+def wrap_to_width(text, font_path, font_size, max_px, renderer, dpi):
+    """ตัดบรรทัดให้เต็มความกว้าง max_px ก่อนขึ้นบรรทัดใหม่ รักษาการขึ้นบรรทัดใหม่ที่ผู้ใช้พิมพ์ไว้"""
+    prop = fm.FontProperties(fname=font_path, size=font_size)
+
+    def width(t):
+        w, _, _ = renderer.get_text_width_height_descent(t, prop, ismath=False)
+        return w
+
+    def fits(t):
+        return width(t.rstrip()) <= max_px
+
+    out_lines = []
+    for para in str(text).splitlines():
+        if not para.strip():
+            out_lines.append("")
+            continue
+        line = ""
+        for unit in _thai_units(para):
+            if fits(line + unit):
+                line += unit
+                continue
+            if line.strip():
+                out_lines.append(line.rstrip())
+                line = ""
+            unit = unit.lstrip()
+            if fits(unit):
+                line = unit
+            else:
+                parts = _split_long_unit(unit, fits)
+                out_lines.extend(p.rstrip() for p in parts[:-1])
+                line = parts[-1] if parts else ""
+        if line.strip():
+            out_lines.append(line.rstrip())
+    return "\n".join(out_lines)
+
 def fmt_num(v):
     return f"{v:g}"
 
@@ -280,6 +348,8 @@ with tab_dashboard:
                     fig.suptitle(f'รายงานผลการเรียนรู้: {report_student} (เดือน {report_month} ปี {report_year})',
                                  fontproperties=prop_header, fontsize=28, y=0.985)
 
+                    renderer = fig.canvas.get_renderer()
+
                     for r_idx, subj in enumerate(subject_order):
                         ax = fig.add_subplot(gs[r_idx, 0])
                         ax.set_xlim(-1, 101)
@@ -359,16 +429,16 @@ with tab_dashboard:
 
                         # --- ส่วนขวา: ความเห็น (วิชาที่ไม่มีหัวข้อย่อย ใช้ตัวอักษรใหญ่ขึ้น) ---
                         cx = 73 if has_breakdown else 40
-                        cwidth = 36 if has_breakdown else 50
                         c_head_size = 13 if has_breakdown else 20
                         c_font_size = 12 if has_breakdown else 19
                         ax.text(cx, 80, "ความเห็น", fontproperties=prop_title, fontsize=c_head_size,
                                 color='#333333', ha='left', va='top')
                         fetched_comment = get_real_comment(subj, total_score, sum_full_score)
-                        wrapped = "\n".join(
-                            "\n".join(textwrap.wrap(part, width=cwidth, break_long_words=True) or [""])
-                            for part in str(fetched_comment).splitlines()
-                        )
+                        # ความกว้างที่ใช้ได้จริง: จาก cx ไปถึงขอบกรอบ (เว้นขอบขวา 2 หน่วย)
+                        px_per_unit = ax.get_window_extent(renderer).width / 102.0
+                        max_px = (99 - cx) * px_per_unit
+                        wrapped = wrap_to_width(fetched_comment, "Sarabun-Regular.ttf", c_font_size,
+                                                max_px, renderer, fig.dpi)
                         ax.text(cx, 68 if not has_breakdown else 70, wrapped, fontproperties=prop_comment, fontsize=c_font_size,
                                 color='#333333', ha='left', va='top', linespacing=1.5)
 
