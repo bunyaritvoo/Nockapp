@@ -439,8 +439,19 @@ with tab_dashboard:
                         max_px = (99 - cx) * px_per_unit
                         wrapped = wrap_to_width(fetched_comment, "Sarabun-Regular.ttf", c_font_size,
                                                 max_px, renderer, fig.dpi)
-                        ax.text(cx, 68 if not has_breakdown else 70, wrapped, fontproperties=prop_comment, fontsize=c_font_size,
-                                color='#333333', ha='left', va='top', linespacing=1.5)
+                        # วาดทีละบรรทัดด้วยระยะห่างที่กำหนดเอง (คุมระยะบรรทัดได้แน่นอน)
+                        y_start = 68 if not has_breakdown else 70
+                        line_factor = 1.9 if not has_breakdown else 1.75
+                        px_per_unit_y = ax.get_window_extent(renderer).height / 102.0
+                        step_units = (c_font_size * line_factor * fig.dpi / 72.0) / px_per_unit_y
+                        comment_lines = wrapped.split("\n")
+                        # ถ้าคอมเมนต์ยาวจนล้นกรอบ ให้บีบระยะบรรทัดลงอัตโนมัติ (ไม่ต่ำกว่า 1.3 เท่า)
+                        room = y_start - 3
+                        if len(comment_lines) * step_units > room:
+                            step_units = max(room / len(comment_lines), step_units * 1.3 / line_factor)
+                        for li, line_txt in enumerate(comment_lines):
+                            ax.text(cx, y_start - li * step_units, line_txt, fontproperties=prop_comment,
+                                    fontsize=c_font_size, color='#333333', ha='left', va='top')
 
                     st.pyplot(fig)
 
