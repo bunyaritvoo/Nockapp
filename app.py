@@ -3,9 +3,11 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.font_manager as fm
+from matplotlib.patches import FancyBboxPatch, Rectangle
 import urllib.request
 import gspread
 import os
+import io
 import textwrap
 
 # --- 1. CONFIGURATION ---
@@ -108,19 +110,51 @@ def get_real_comment(subject, total_score, full_score):
             continue
     return "คะแนนไม่อยู่ในเกณฑ์ที่ตั้งไว้"
 
-def format_radar_label(label):
-    label = label.strip()
-    if "Demonstrative" in label:
-        return label.replace("/", "\n")
-    elif "Countable" in label and "Uncountable" in label:
-        return "Countable and\nUncountable Nouns"
-    elif "Singular" in label and "Plural" in label:
-        return "Singular &\nPlural Nouns"
-    elif "Auxiliary" in label:
-        return "Auxiliary Verb\nand Modal Verb"
-    elif "ตัวประกอบของจำนวนนับ" in label:
-        return "ตัวประกอบของจำนวนนับ\nห.ร.ม. ค.ร.น."
-    return "\n".join(textwrap.wrap(label, width=22, break_long_words=False))
+# --- ฟังก์ชันช่วยสำหรับรายงานแบบช่องคะแนน ---
+def get_topics(month, subject):
+    """ดึงชื่อหัวข้อย่อยและคะแนนเต็มจาก TopicSettings (คืน list ว่างถ้าไม่ได้ตั้งค่า)"""
+    labels, fulls = [], []
+    match_topic = df_topics[(df_topics['Month'].astype(str).str.strip() == month.strip()) &
+                            (df_topics['Subject'].astype(str).str.strip() == subject.strip())]
+    if not match_topic.empty:
+        row = match_topic.iloc[0]
+        for i in range(1, 8):
+            t_name = str(row.get(f'Topic_{i}', '')).strip()
+            if t_name and t_name.lower() != 'nan':
+                labels.append(t_name)
+                try:
+                    fulls.append(float(row.get(f'FullScore_{i}', 10)))
+                except:
+                    fulls.append(10.0)
+    return labels, fulls
+
+def read_scores(row, n):
+    """อ่านคะแนน n หัวข้อ เริ่มจากคอลัมน์ที่ 6 (index 5) ของแถวนั้น"""
+    out = []
+    for idx in range(n):
+        try:
+            v = str(row.iloc[5 + idx]).strip()
+            out.append(float(v) if v else 0.0)
+        except:
+            out.append(0.0)
+    return out
+
+def draw_stat_box(ax, x, y, w, h, title, value_text, sub_text, color, highlight=False):
+    face = color if highlight else 'white'
+    alpha = 0.15 if highlight else 1.0
+    ax.add_patch(FancyBboxPatch((x, y), w, h, boxstyle="round,pad=0.3,rounding_size=2",
+                                linewidth=2.2, edgecolor=color, facecolor=face, alpha=alpha))
+    ax.add_patch(FancyBboxPatch((x, y), w, h, boxstyle="round,pad=0.3,rounding_size=2",
+                                linewidth=2.2, edgecolor=color, facecolor='none'))
+    ax.text(x + w / 2, y + h - 5, title, fontproperties=prop_title, fontsize=13,
+            color=color, ha='center', va='top')
+    ax.text(x + w / 2, y + h / 2 - 3, value_text, fontproperties=prop_header, fontsize=28,
+            color='#222222', ha='center', va='center')
+    ax.text(x + w / 2, y + 5, sub_text, fontproperties=prop_normal, fontsize=11,
+            color='#666666', ha='center', va='bottom')
+
+def fmt_num(v):
+    return f"{v:g}"
 
 # --- 4. UI INTERFACE ---
 st.title("🎓 ระบบจัดการคะแนนและรายงานผล")
@@ -210,7 +244,7 @@ with tab_entry:
             st.dataframe(display_df, use_container_width=True, height=600)
 
 # ==========================================
-# 🌟 TAB 2: กราฟ + ดึงคอมเมนต์อัตโนมัติตามช่วงคะแนน
+# 🌟 TAB 2: รายงานผลแบบช่องคะแนน + คอมเมนต์อัตโนมัติตามช่วงคะแนน
 # ==========================================
 with tab_dashboard:
     col_rep1, col_rep2 = st.columns(2)
@@ -236,140 +270,110 @@ with tab_dashboard:
                 student_data = df_report[df_report.iloc[:, 0].str.strip() == report_student]
                 subjects_taken = student_data.iloc[:, 1].str.strip().tolist()
 
-                if subjects_taken:
-                    fig = plt.figure(figsize=(18, 12))
-                    
-                    fig.subplots_adjust(top=0.82, hspace=0.4, wspace=0.3)
-                    gs = fig.add_gridspec(2, 3, width_ratios=[1, 1, 1.2])
-                    fig.suptitle(f'รายงานผลการเรียนรู้: {report_student} (เดือน {report_month} ปี {report_year})', fontproperties=prop_header, fontsize=28, y=0.96)
+                colors = {"คณิตศาสตร์": "blue", "วิทยาศาสตร์": "red", "ภาษาอังกฤษ": "green"}
+                subject_order = [s for s in ["คณิตศาสตร์", "วิทยาศาสตร์", "ภาษาอังกฤษ"] if s in subjects_taken]
 
-                    ax_dict = {
-                        "คณิตศาสตร์": fig.add_subplot(gs[0, 0], polar=True),
-                        "วิทยาศาสตร์": fig.add_subplot(gs[1, 0], polar=True),
-                        "ภาษาอังกฤษ": fig.add_subplot(gs[1, 1], polar=True)
-                    }
-                    colors = {"คณิตศาสตร์": "blue", "วิทยาศาสตร์": "red", "ภาษาอังกฤษ": "green"}
-                    
-                    ax_stats = fig.add_subplot(gs[0, 1])
-                    ax_stats.axis('off')
-                    ax_stats.set_ylim(0, 100)
-                    ax_stats.set_xlim(0, 100)
-                    
-                    ax_text = fig.add_subplot(gs[:, 2])
-                    ax_text.axis('off')
-                    ax_text.set_ylim(0, 100)
-                    ax_text.set_xlim(0, 100)
-                    
-                    comment_texts = {"คณิตศาสตร์": "ยังไม่มีข้อมูล", "วิทยาศาสตร์": "ยังไม่มีข้อมูล", "ภาษาอังกฤษ": "ยังไม่มีข้อมูล"}
-                    stats_texts = {}
+                if subject_order:
+                    n_rows = len(subject_order)
+                    fig = plt.figure(figsize=(18, 4.6 * n_rows + 1.2))
+                    gs = fig.add_gridspec(n_rows, 1, hspace=0.12, top=1 - 1.1 / (4.6 * n_rows + 1.2), bottom=0.02, left=0.03, right=0.97)
+                    fig.suptitle(f'รายงานผลการเรียนรู้: {report_student} (เดือน {report_month} ปี {report_year})',
+                                 fontproperties=prop_header, fontsize=28, y=0.985)
 
-                    for subj in subjects_taken:
-                        if subj not in ax_dict: 
-                            continue
-                        ax = ax_dict[subj]
-                        
-                        t_labels, t_fulls = [], []
-                        match_topic = df_topics[(df_topics['Month'].astype(str).str.strip() == report_month) & (df_topics['Subject'].astype(str).str.strip() == subj)]
-                        if not match_topic.empty:
-                            row = match_topic.iloc[0]
-                            for i in range(1, 8):
-                                t_name = str(row.get(f'Topic_{i}', '')).strip()
-                                if t_name and t_name.lower() != 'nan' and t_name != '':
-                                    t_labels.append(t_name)
-                                    try: 
-                                        t_fulls.append(int(row.get(f'FullScore_{i}', 10)))
-                                    except: 
-                                        t_fulls.append(10)
+                    for r_idx, subj in enumerate(subject_order):
+                        ax = fig.add_subplot(gs[r_idx, 0])
+                        ax.set_xlim(-1, 101)
+                        ax.set_ylim(-1, 101)
+                        ax.axis('off')
+                        line_color = colors.get(subj, "gray")
 
+                        # --- หัวข้อย่อย + คะแนนเต็ม ---
+                        t_labels, t_fulls = get_topics(report_month, subj)
                         if not t_labels:
-                            t_labels, t_fulls = ["T1", "T2", "T3"], [10, 10, 10]
+                            # ยังไม่ได้ตั้งค่า TopicSettings -> ถือเป็นคะแนนรวมช่องเดียว (คะแนนเต็มไม่ทราบ)
+                            t_labels, t_fulls = ["คะแนนรวม"], [0.0]
+                        n_topics = len(t_labels)
 
                         subj_row = student_data[student_data.iloc[:, 1].str.strip() == subj].iloc[0]
                         student_branch_val = str(subj_row.iloc[4]).strip()
-                        
-                        scores_raw = []
-                        for idx in range(len(t_labels)):
-                            try:
-                                val_str = str(subj_row.iloc[5 + idx]).strip()
-                                scores_raw.append(float(val_str) if val_str else 0.0)
-                            except:
-                                scores_raw.append(0.0)
 
-                        scores_norm = [(s/f)*10 if f>0 else 0 for s, f in zip(scores_raw, t_fulls)]
+                        # 1) คะแนนรายหัวข้อ  2) นำมารวมกัน
+                        scores_raw = read_scores(subj_row, n_topics)
                         total_score = sum(scores_raw)
                         sum_full_score = sum(t_fulls)
-                        calc_percent = (total_score / sum_full_score) * 100 if sum_full_score > 0 else 0.0
+                        calc_percent = (total_score / sum_full_score) * 100 if sum_full_score > 0 else None
 
+                        # --- สถิติเพื่อนในสาขาเดียวกัน (รวมคะแนนทุกหัวข้อของแต่ละคนก่อน แล้วค่อยหา Min/Max/Mean) ---
                         mask = (df_report.iloc[:, 1].astype(str).str.strip() == subj) & (df_report.iloc[:, 4].astype(str).str.strip() == student_branch_val)
                         peer_data = df_report[mask]
-                        
-                        peer_totals = []
-                        for _, prow in peer_data.iterrows():
-                            p_scores = []
-                            for idx in range(len(t_labels)):
-                                try:
-                                    val_s = str(prow.iloc[5 + idx]).strip()
-                                    p_scores.append(float(val_s) if val_s else 0.0)
-                                except:
-                                    p_scores.append(0.0)
-                            peer_totals.append(sum(p_scores))
-                            
-                        if peer_totals:
-                            stat_min = min(peer_totals)
-                            stat_max = max(peer_totals)
-                            stat_mean = sum(peer_totals) / len(peer_totals)
-                            stats_texts[subj] = f"Max: {stat_max:g}   |   Min: {stat_min:g}   |   Mean: {stat_mean:.1f}"
+                        peer_totals = [sum(read_scores(prow, n_topics)) for _, prow in peer_data.iterrows()]
+
+                        # --- กรอบพื้นหลังของวิชา ---
+                        ax.add_patch(Rectangle((-0.5, -0.5), 101, 101, facecolor='#FAFAFA', edgecolor=line_color, linewidth=1.5))
+                        ax.text(1.5, 97, f"วิชา {subj}", fontproperties=prop_header, fontsize=22,
+                                color=line_color, ha='left', va='top')
+
+                        # --- ส่วนซ้าย: คะแนนแจกแจงรายหัวข้อ (แสดงเมื่อมีมากกว่า 1 หัวข้อ) ---
+                        has_breakdown = n_topics > 1
+                        if has_breakdown:
+                            ax.text(1.5, 80, "คะแนนแจกแจงรายหัวข้อ", fontproperties=prop_title, fontsize=13,
+                                    color='#333333', ha='left', va='top')
+                            y_line = 70
+                            step = 8
+                            for lbl, sc, fl in zip(t_labels, scores_raw, t_fulls):
+                                short = lbl if len(lbl) <= 26 else lbl[:25] + "…"
+                                ax.text(1.5, y_line, short, fontproperties=prop_normal, fontsize=11,
+                                        color='#444444', ha='left', va='center')
+                                ax.text(35, y_line, f"{fmt_num(sc)}/{fmt_num(fl)}", fontproperties=prop_normal, fontsize=12,
+                                        color='#222222', ha='right', va='center')
+                                y_line -= step
+                            ax.plot([1.5, 35], [y_line + step / 2 + 0.5] * 2, color='#999999', linewidth=1)
+                            ax.text(1.5, y_line, "รวม", fontproperties=prop_title, fontsize=13,
+                                    color=line_color, ha='left', va='center')
+                            ax.text(35, y_line, f"{fmt_num(total_score)}/{fmt_num(sum_full_score)}", fontproperties=prop_title, fontsize=13,
+                                    color=line_color, ha='right', va='center')
+
+                        # --- ส่วนกลาง: 4 ช่อง (ตัวเอง / ต่ำสุด / สูงสุด / เฉลี่ย) ---
+                        bx0 = 40 if has_breakdown else 3
+                        bw, bh, gap = 13.5, 33, 2
+                        y_top, y_bot = 52, 12
+
+                        if sum_full_score > 0:
+                            own_sub = f"เต็ม {fmt_num(sum_full_score)} ({calc_percent:.1f}%)"
                         else:
-                            stats_texts[subj] = "ไม่มีข้อมูลสถิติ"
+                            own_sub = "ยังไม่ได้ตั้งคะแนนเต็ม"
 
-                        num_vars = len(t_labels)
-                        angles = [n / float(num_vars) * 2 * np.pi for n in range(num_vars)]
-                        angles += angles[:1]
-                        scores_norm += scores_norm[:1]
-                        
-                        ax.set_theta_offset(np.pi / 2)
-                        ax.set_theta_direction(-1)
-                        ax.set_xticks(angles[:-1])
-                        
-                        wrapped_labels = [format_radar_label(l) for l in t_labels]
-                        ax.set_xticklabels(wrapped_labels, fontproperties=prop_normal, fontsize=10)
-                        ax.set_yticks(np.arange(0, 11, 2))
-                        ax.set_ylim(0, 10)
-                        
-                        line_color = colors.get(subj, "gray")
-                        ax.plot(angles, scores_norm, color=line_color, linewidth=2)
-                        ax.fill(angles, scores_norm, color=line_color, alpha=0.25)
-                        
-                        ax.set_title(f"วิชา {subj}", color=line_color, y=1.1, fontproperties=prop_title)
+                        if peer_totals:
+                            stat_min, stat_max = min(peer_totals), max(peer_totals)
+                            stat_mean = sum(peer_totals) / len(peer_totals)
+                            n_peer = ""
+                            min_txt, max_txt, mean_txt = fmt_num(stat_min), fmt_num(stat_max), f"{stat_mean:.1f}"
+                        else:
+                            n_peer = ""
+                            min_txt = max_txt = mean_txt = "-"
 
+                        draw_stat_box(ax, bx0, y_top, bw, bh, "คะแนนของตัวเอง", fmt_num(total_score), own_sub, line_color, highlight=True)
+                        draw_stat_box(ax, bx0 + bw + gap, y_top, bw, bh, "คะแนนต่ำสุด", min_txt, n_peer, line_color)
+                        draw_stat_box(ax, bx0, y_bot, bw, bh, "คะแนนสูงสุด", max_txt, n_peer, line_color)
+                        draw_stat_box(ax, bx0 + bw + gap, y_bot, bw, bh, "คะแนนเฉลี่ย", mean_txt, n_peer, line_color)
+
+                        # --- ส่วนขวา: ความเห็น ---
+                        cx = 73 if has_breakdown else 40
+                        cwidth = 40 if has_breakdown else 58
+                        ax.text(cx, 80, "ความเห็น", fontproperties=prop_title, fontsize=13,
+                                color='#333333', ha='left', va='top')
                         fetched_comment = get_real_comment(subj, total_score, sum_full_score)
-                        comment_texts[subj] = f"คะแนนรวม: {total_score}/{sum_full_score} (คิดเป็น {calc_percent:.1f}%)\nความเห็น:\n{fetched_comment}"
-
-                    for subj, ax in ax_dict.items():
-                        if subj not in subjects_taken: 
-                            ax.axis('off')
-
-                    ax_stats.text(0, 95, "📊 สถิติเปรียบเทียบในสาขา", fontproperties=prop_title, color='#333333', ha='left', va='top', fontsize=15)
-                    
-                    y_stat = 75
-                    for subj in ["คณิตศาสตร์", "วิทยาศาสตร์", "ภาษาอังกฤษ"]:
-                        if subj in subjects_taken:
-                            ax_stats.text(0, y_stat, f"• {subj}", fontproperties=prop_title, color=colors.get(subj, "black"), ha='left', va='top')
-                            ax_stats.text(5, y_stat - 12, stats_texts[subj], fontproperties=prop_comment, color='#555555', ha='left', va='top')
-                            y_stat -= 28 
-
-                    y_current = 98 
-                    for subj in ["คณิตศาสตร์", "วิทยาศาสตร์", "ภาษาอังกฤษ"]:
-                        ax_text.text(0, y_current, f"รายงานผล: {subj}", color=colors.get(subj, "black"), fontproperties=prop_title, ha='left', va='top')
-                        y_current -= 4 
-                        
-                        wrapped_text = "\n".join(textwrap.wrap(comment_texts[subj], width=55, break_long_words=False))
-                        ax_text.text(0, y_current, wrapped_text, color='#333333', fontproperties=prop_comment, ha='left', va='top', linespacing=1.5)
-                        
-                        num_lines = len(wrapped_text.split('\n'))
-                        y_current -= (num_lines * 2.8) + 12
+                        wrapped = "\n".join(textwrap.wrap(fetched_comment, width=cwidth, break_long_words=False))
+                        ax.text(cx, 70, wrapped, fontproperties=prop_comment, fontsize=12,
+                                color='#333333', ha='left', va='top', linespacing=1.4)
 
                     st.pyplot(fig)
+
+                    buf = io.BytesIO()
+                    fig.savefig(buf, format="png", dpi=200, bbox_inches="tight")
+                    st.download_button("⬇️ ดาวน์โหลดรายงาน (PNG)", data=buf.getvalue(),
+                                       file_name=f"รายงาน_{report_student}_{report_month}_{report_year}.png",
+                                       mime="image/png")
                 else: 
                     st.info("ไม่พบข้อมูลลงทะเบียนเรียนวิชาของนักเรียนคนนี้")
         else:
