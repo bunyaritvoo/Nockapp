@@ -357,15 +357,20 @@ with tab_dashboard:
                         draw_stat_box(ax, bx0, y_bot, bw, bh, "คะแนนสูงสุด", max_txt, n_peer, line_color)
                         draw_stat_box(ax, bx0 + bw + gap, y_bot, bw, bh, "คะแนนเฉลี่ย", mean_txt, n_peer, line_color)
 
-                        # --- ส่วนขวา: ความเห็น ---
+                        # --- ส่วนขวา: ความเห็น (วิชาที่ไม่มีหัวข้อย่อย ใช้ตัวอักษรใหญ่ขึ้น) ---
                         cx = 73 if has_breakdown else 40
-                        cwidth = 40 if has_breakdown else 58
-                        ax.text(cx, 80, "ความเห็น", fontproperties=prop_title, fontsize=13,
+                        cwidth = 36 if has_breakdown else 50
+                        c_head_size = 13 if has_breakdown else 20
+                        c_font_size = 12 if has_breakdown else 19
+                        ax.text(cx, 80, "ความเห็น", fontproperties=prop_title, fontsize=c_head_size,
                                 color='#333333', ha='left', va='top')
                         fetched_comment = get_real_comment(subj, total_score, sum_full_score)
-                        wrapped = "\n".join(textwrap.wrap(fetched_comment, width=cwidth, break_long_words=False))
-                        ax.text(cx, 70, wrapped, fontproperties=prop_comment, fontsize=12,
-                                color='#333333', ha='left', va='top', linespacing=1.4)
+                        wrapped = "\n".join(
+                            "\n".join(textwrap.wrap(part, width=cwidth, break_long_words=True) or [""])
+                            for part in str(fetched_comment).splitlines()
+                        )
+                        ax.text(cx, 68 if not has_breakdown else 70, wrapped, fontproperties=prop_comment, fontsize=c_font_size,
+                                color='#333333', ha='left', va='top', linespacing=1.5)
 
                     st.pyplot(fig)
 
